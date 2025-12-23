@@ -1,0 +1,116 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmarks:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run benchmarks
+        run: |
+          go test -bench=. -benchmem -benchtime=3s -run=^$ ./tests/benchmark/... | tee benchmark-results.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.txt
+
+  memory-profile:
+    name: Memory Profiling
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run memory benchmarks with profiling
+        run: |
+          go test -bench=BenchmarkMemory -benchmem -memprofile=mem.prof -run=^$ ./tests/benchmark/...
+
+      - name: Analyze memory profile
+        run: |
+          go tool pprof -text mem.prof | head -50 > memory-analysis.txt || true
+
+      - name: Upload memory profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-profile
+          path: |
+            mem.prof
+            memory-analysis.txt
+
+  compare-benchmarks:
+    name: Compare Benchmarks (PR only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+
+      - name: Run base benchmarks
+        run: |
+          cd base
+          go test -bench=. -benchmem -count=5 -run=^$ ./tests/benchmark/... > ../base-bench.txt 2>/dev/null || true
+
+      - name: Run PR benchmarks
+        run: |
+          go test -bench=. -benchmem -count=5 -run=^$ ./tests/benchmark/... > pr-bench.txt 2>/dev/null || true
+
+      - name: Compare benchmarks
+        run: |
+          benchstat base-bench.txt pr-bench.txt > comparison.txt || true
+          cat comparison.txt
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-comparison
+          path: comparison.txt

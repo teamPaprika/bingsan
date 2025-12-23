@@ -1,0 +1,95 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+iceberg-catalog
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# Configuration with secrets
+config.yaml
+config.local.yaml
+secrets.yaml
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Air (hot reload)
+.air.toml
+
+# Docker
+.docker/
+
+# Kubernetes secrets
+deployments/kubernetes/*-secret.yaml
+!deployments/kubernetes/secret.yaml.example
+
+# Data directories
+data/
+warehouse/
+
+# Database files
+*.db
+*.sqlite
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.csr
+
+# Profiling
+*.prof
+*.pprof
+pprof/
+
+# Build artifacts
+dist/
+release/
+
+# Local tool configurations
+.claude/
+.serena/
+.specify/
+CLAUDE.md
+
+# Backup files
+*.bak

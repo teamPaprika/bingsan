@@ -1,0 +1,146 @@
+package handlers
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/kimuyb/bingsan/internal/config"
+	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/kimuyb/bingsan/internal/metrics"
+)
+
+// CommitTransactionRequest is the request for committing a multi-table transaction.
+type CommitTransactionRequest struct {
+	TableChanges []TableChange `json:"table-changes"`
+}
+
+// TableChange represents changes to a single table in a transaction.
+type TableChange struct {
+	Identifier   TableIdentifier `json:"identifier"`
+	Requirements []Requirement   `json:"requirements"`
+	Updates      []Update        `json:"updates"`
+}
+
+// CommitTransactionResponse is the response for a multi-table transaction commit.
+type CommitTransactionResponse struct {
+	CommitResults []CommitResult `json:"commit-results"`
+}
+
+// CommitResult is the result of committing changes to a single table.
+type CommitResult struct {
+	Identifier       TableIdentifier `json:"identifier"`
+	MetadataLocation string          `json:"metadata-location"`
+	Metadata         map[string]any  `json:"metadata"`
+}
+
+// CommitTransaction commits atomic multi-table updates.
+// POST /v1/{prefix}/transactions/commit
+func CommitTransaction(database *db.DB, cfg *config.Config) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var req CommitTransactionRequest
+		if err := c.BodyParser(&req); err != nil {
+			return badRequest(c, "invalid request body")
+		}
+
+		if len(req.TableChanges) == 0 {
+			return badRequest(c, "at least one table change is required")
+		}
+
+		// Execute transaction
+		results, err := executeTransaction(c.Context(), database, cfg, req.TableChanges)
+		if err != nil {
+			metrics.RecordTransactionCommit("failed")
+			return err
+		}
+
+		// Record metrics
+		metrics.RecordTransactionCommit("success")
+
+		return c.JSON(CommitTransactionResponse{
+			CommitResults: results,
+		})
+	}
+}
+
+// executeTransaction executes a multi-table transaction atomically.
+func executeTransaction(ctx context.Context, database *db.DB, cfg *config.Config, changes []TableChange) ([]CommitResult, error) {
+	tx, err := database.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to begin transaction: "+err.Error())
+	}
+	defer tx.Rollback(ctx)
+
+	results := make([]CommitResult, len(changes))
+
+	for i, change := range changes {
+		result, err := commitTableInTx(ctx, tx, cfg, change)
+		if err != nil {
+			return nil, err
+		}
+		results[i] = *result
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to commit transaction: "+err.Error())
+	}
+
+	return results, nil
+}
+
+// commitTableInTx commits changes to a single table within a transaction.
+func commitTableInTx(ctx context.Context, tx pgx.Tx, cfg *config.Config, change TableChange) (*CommitResult, error) {
+	// Get namespace ID
+	var namespaceID string
+	err := tx.QueryRow(ctx, `
+		SELECT id FROM namespaces WHERE name = $1
+	`, change.Identifier.Namespace).Scan(&namespaceID)
+
+	if err == pgx.ErrNoRows {
+		return nil, fiber.NewError(fiber.StatusNotFound,
+			fmt.Sprintf("Namespace does not exist: %s", strings.Join(change.Identifier.Namespace, ".")))
+	}
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get namespace: "+err.Error())
+	}
+
+	// Get current table state with lock
+	var tableID string
+	var metadataLocation string
+	var metadata map[string]any
+	err = tx.QueryRow(ctx, `
+		SELECT id, metadata_location, metadata FROM tables
+		WHERE namespace_id = $1 AND name = $2
+		FOR UPDATE
+	`, namespaceID, change.Identifier.Name).Scan(&tableID, &metadataLocation, &metadata)
+
+	if err == pgx.ErrNoRows {
+		return nil, fiber.NewError(fiber.StatusNotFound,
+			fmt.Sprintf("Table does not exist: %s.%s",
+				strings.Join(change.Identifier.Namespace, "."), change.Identifier.Name))
+	}
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get table: "+err.Error())
+	}
+
+	// Validate requirements
+	for _, req := range change.Requirements {
+		if !validateRequirement(metadata, req) {
+			return nil, fiber.NewError(fiber.StatusConflict,
+				fmt.Sprintf("Requirement failed for table %s.%s: %s",
+					strings.Join(change.Identifier.Namespace, "."), change.Identifier.Name, req.Type))
+		}
+	}
+
+	// TODO: Apply updates to metadata
+	// For now, just return current state
+
+	return &CommitResult{
+		Identifier:       change.Identifier,
+		MetadataLocation: metadataLocation,
+		Metadata:         metadata,
+	}, nil
+}

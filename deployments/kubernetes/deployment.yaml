@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iceberg-catalog
+  labels:
+    app: iceberg-catalog
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: iceberg-catalog
+  template:
+    metadata:
+      labels:
+        app: iceberg-catalog
+    spec:
+      serviceAccountName: iceberg-catalog
+      containers:
+        - name: iceberg-catalog
+          image: iceberg-catalog:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8181
+              name: http
+          envFrom:
+            - configMapRef:
+                name: iceberg-catalog-config
+            - secretRef:
+                name: iceberg-catalog-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8181
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8181
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: iceberg-catalog
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: iceberg-catalog

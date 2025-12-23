@@ -1,0 +1,271 @@
+# Test API Contract
+# Defines the expected behavior for test infrastructure endpoints
+
+openapi: 3.0.3
+info:
+  title: Bingsan Test Infrastructure API
+  version: 1.0.0
+  description: Internal API for test orchestration and reporting
+
+paths:
+  /test/suites:
+    get:
+      operationId: listTestSuites
+      summary: List available test suites
+      responses:
+        '200':
+          description: List of test suites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestSuiteList'
+
+  /test/suites/{suite}/run:
+    post:
+      operationId: runTestSuite
+      summary: Execute a test suite
+      parameters:
+        - name: suite
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestRunRequest'
+      responses:
+        '202':
+          description: Test run started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRunResponse'
+
+  /test/runs/{runId}:
+    get:
+      operationId: getTestRunStatus
+      summary: Get test run status
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Test run status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRunStatus'
+
+  /benchmark/run:
+    post:
+      operationId: runBenchmark
+      summary: Execute a benchmark
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BenchmarkRequest'
+      responses:
+        '202':
+          description: Benchmark started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BenchmarkResponse'
+
+  /benchmark/results/{runId}:
+    get:
+      operationId: getBenchmarkResults
+      summary: Get benchmark results
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Benchmark results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BenchmarkResults'
+
+components:
+  schemas:
+    TestSuiteList:
+      type: object
+      properties:
+        suites:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestSuite'
+
+    TestSuite:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+          example: "contract"
+        type:
+          type: string
+          enum: [contract, integration, benchmark, e2e]
+        testCount:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+
+    TestRunRequest:
+      type: object
+      properties:
+        parallelism:
+          type: integer
+          default: 4
+        tags:
+          type: array
+          items:
+            type: string
+        timeout:
+          type: string
+          example: "10m"
+
+    TestRunResponse:
+      type: object
+      required:
+        - runId
+        - status
+      properties:
+        runId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running]
+        startedAt:
+          type: string
+          format: date-time
+
+    TestRunStatus:
+      type: object
+      required:
+        - runId
+        - status
+      properties:
+        runId:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, passed, failed, timeout]
+        passed:
+          type: integer
+        failed:
+          type: integer
+        skipped:
+          type: integer
+        duration:
+          type: string
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestFailure'
+
+    TestFailure:
+      type: object
+      properties:
+        testId:
+          type: string
+        testName:
+          type: string
+        error:
+          type: string
+        expected:
+          type: string
+        actual:
+          type: string
+
+    BenchmarkRequest:
+      type: object
+      required:
+        - name
+        - endpoint
+        - method
+        - concurrency
+        - duration
+      properties:
+        name:
+          type: string
+        endpoint:
+          type: string
+        method:
+          type: string
+          enum: [GET, POST, PUT, DELETE]
+        concurrency:
+          type: integer
+          minimum: 1
+        duration:
+          type: string
+          example: "30s"
+        requestBody:
+          type: object
+
+    BenchmarkResponse:
+      type: object
+      required:
+        - runId
+        - status
+      properties:
+        runId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, warmup, running]
+
+    BenchmarkResults:
+      type: object
+      required:
+        - runId
+        - status
+        - metrics
+      properties:
+        runId:
+          type: string
+        status:
+          type: string
+          enum: [completed, failed, threshold_exceeded]
+        metrics:
+          $ref: '#/components/schemas/BenchmarkMetrics'
+        thresholdsPassed:
+          type: boolean
+
+    BenchmarkMetrics:
+      type: object
+      properties:
+        totalRequests:
+          type: integer
+        successfulRequests:
+          type: integer
+        failedRequests:
+          type: integer
+        requestsPerSecond:
+          type: number
+        latencyP50Ms:
+          type: number
+        latencyP95Ms:
+          type: number
+        latencyP99Ms:
+          type: number
+        errorRate:
+          type: number
+        duration:
+          type: string

@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: iceberg-catalog
+  labels:
+    app: iceberg-catalog
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8181
+      targetPort: 8181
+      protocol: TCP
+      name: http
+  selector:
+    app: iceberg-catalog
+---
+# Optional: LoadBalancer for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: iceberg-catalog-lb
+  labels:
+    app: iceberg-catalog
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8181
+      targetPort: 8181
+      protocol: TCP
+      name: http
+  selector:
+    app: iceberg-catalog

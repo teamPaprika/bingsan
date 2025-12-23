@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bingsan-config
+  labels:
+    app: bingsan
+    app.kubernetes.io/name: bingsan
+    app.kubernetes.io/component: catalog
+data:
+  database-host: "postgres"
+  database-port: "5432"
+  database-name: "iceberg_catalog"
+  database-ssl-mode: "disable"
+  storage-type: "s3"
+  storage-warehouse: "s3://warehouse/"
+  auth-enabled: "false"
