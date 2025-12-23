@@ -2,6 +2,7 @@ package benchmark
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"sync"
 	"sync/atomic"
@@ -26,7 +27,7 @@ func BenchmarkConcurrentConnections(b *testing.B) {
 
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					req := httptest.NewRequest("GET", "/health", nil)
+					req := httptest.NewRequest("GET", "/health", http.NoBody)
 					resp, err := server.App().Test(req, -1)
 					if err != nil {
 						b.Fatal(err)
@@ -57,7 +58,7 @@ func BenchmarkSustainedLoad(b *testing.B) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < b.N/workers; i++ {
-				req := httptest.NewRequest("GET", "/health", nil)
+				req := httptest.NewRequest("GET", "/health", http.NoBody)
 				resp, err := server.App().Test(req, 1000)
 				if err != nil {
 					atomic.AddInt64(&totalErrors, 1)
@@ -93,7 +94,7 @@ func BenchmarkMixedWorkload(b *testing.B) {
 		i := 0
 		for pb.Next() {
 			endpoint := endpoints[i%len(endpoints)]
-			req := httptest.NewRequest("GET", endpoint, nil)
+			req := httptest.NewRequest("GET", endpoint, http.NoBody)
 			req.Header.Set("Content-Type", "application/json")
 			resp, err := server.App().Test(req, -1)
 			if err != nil {
@@ -116,7 +117,7 @@ func BenchmarkConnectionThroughput(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			req := httptest.NewRequest("GET", "/health", nil)
+			req := httptest.NewRequest("GET", "/health", http.NoBody)
 			resp, err := server.App().Test(req, -1)
 			if err != nil {
 				continue
@@ -149,7 +150,7 @@ func BenchmarkBurstTraffic(b *testing.B) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				req := httptest.NewRequest("GET", "/health", nil)
+				req := httptest.NewRequest("GET", "/health", http.NoBody)
 				resp, err := server.App().Test(req, 1000)
 				if err != nil {
 					atomic.AddInt64(&errors, 1)
@@ -174,8 +175,8 @@ func BenchmarkBurstTraffic(b *testing.B) {
 // Target: Support 100 concurrent requests without performance degradation.
 // =============================================================================
 
-// BenchmarkConcurrent100Serialization measures concurrent JSON serialization with 100 goroutines.
-// Target: No performance degradation at 100 concurrent requests
+// BenchmarkConcurrent100Serialization measures concurrent JSON serialization.
+// Target: No performance degradation at 100 concurrent requests.
 func BenchmarkConcurrent100Serialization(b *testing.B) {
 	bp := pool.NewBufferPool(nil)
 
@@ -213,13 +214,13 @@ func BenchmarkConcurrent100Serialization(b *testing.B) {
 // BenchmarkConcurrent100VsBaseline compares pooled vs non-pooled under 100 concurrent requests.
 func BenchmarkConcurrent100VsBaseline(b *testing.B) {
 	metadata := map[string]any{
-		"format-version":        2,
-		"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
-		"location":              "s3://warehouse/default/test_table",
-		"last-updated-ms":       1703376000000,
-		"properties":            map[string]string{"owner": "test"},
-		"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
-		"current-schema-id":     0,
+		"format-version":    2,
+		"table-uuid":        "550e8400-e29b-41d4-a716-446655440000",
+		"location":          "s3://warehouse/default/test_table",
+		"last-updated-ms":   1703376000000,
+		"properties":        map[string]string{"owner": "test"},
+		"schemas":           []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
+		"current-schema-id": 0,
 	}
 
 	b.Run("WithPool", func(b *testing.B) {
@@ -233,7 +234,7 @@ func BenchmarkConcurrent100VsBaseline(b *testing.B) {
 			for pb.Next() {
 				buf := bp.Get()
 				encoder := json.NewEncoder(buf)
-				_ = encoder.Encode(metadata)
+				_ = encoder.Encode(metadata) //nolint:errcheck // benchmark
 				bp.Put(buf)
 			}
 		})
@@ -260,13 +261,13 @@ func BenchmarkConcurrentScaling(b *testing.B) {
 	bp := pool.NewBufferPool(nil)
 
 	metadata := map[string]any{
-		"format-version":        2,
-		"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
-		"location":              "s3://warehouse/default/test_table",
-		"last-updated-ms":       1703376000000,
-		"properties":            map[string]string{"owner": "test"},
-		"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
-		"current-schema-id":     0,
+		"format-version":    2,
+		"table-uuid":        "550e8400-e29b-41d4-a716-446655440000",
+		"location":          "s3://warehouse/default/test_table",
+		"last-updated-ms":   1703376000000,
+		"properties":        map[string]string{"owner": "test"},
+		"schemas":           []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
+		"current-schema-id": 0,
 	}
 
 	concurrencyLevels := []int{1, 10, 50, 100, 200}
@@ -290,7 +291,7 @@ func BenchmarkConcurrentScaling(b *testing.B) {
 				for pb.Next() {
 					buf := bp.Get()
 					encoder := json.NewEncoder(buf)
-					_ = encoder.Encode(metadata)
+					_ = encoder.Encode(metadata) //nolint:errcheck // benchmark
 					bp.Put(buf)
 				}
 			})
@@ -304,14 +305,14 @@ func BenchmarkConcurrentLargeSchema(b *testing.B) {
 
 	// Large schema with 150 columns
 	metadata := map[string]any{
-		"format-version":        2,
-		"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
-		"location":              "s3://warehouse/default/large_table",
-		"last-updated-ms":       1703376000000,
-		"properties":            map[string]string{"owner": "test"},
-		"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(150)}},
-		"current-schema-id":     0,
-		"snapshots":             generateSnapshots(20),
+		"format-version":    2,
+		"table-uuid":        "550e8400-e29b-41d4-a716-446655440000",
+		"location":          "s3://warehouse/default/large_table",
+		"last-updated-ms":   1703376000000,
+		"properties":        map[string]string{"owner": "test"},
+		"schemas":           []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(150)}},
+		"current-schema-id": 0,
+		"snapshots":         generateSnapshots(20),
 	}
 
 	b.SetParallelism(100)

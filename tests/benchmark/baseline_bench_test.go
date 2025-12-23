@@ -27,20 +27,20 @@ import (
 func BenchmarkBaselineTableMetadataSerialization(b *testing.B) {
 	// Sample table metadata similar to what handlers serialize
 	metadata := map[string]any{
-		"format-version":       2,
-		"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-		"location":             "s3://warehouse/default/test_table",
-		"last-updated-ms":      1703376000000,
-		"properties":           map[string]string{"owner": "test", "created-by": "bingsan"},
-		"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
-		"current-schema-id":    0,
-		"partition-specs":      []any{map[string]any{"spec-id": 0, "fields": []any{}}},
-		"default-spec-id":      0,
-		"sort-orders":          []any{map[string]any{"order-id": 0, "fields": []any{}}},
+		"format-version":        2,
+		"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
+		"location":              "s3://warehouse/default/test_table",
+		"last-updated-ms":       1703376000000,
+		"properties":            map[string]string{"owner": "test", "created-by": "bingsan"},
+		"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
+		"current-schema-id":     0,
+		"partition-specs":       []any{map[string]any{"spec-id": 0, "fields": []any{}}},
+		"default-spec-id":       0,
+		"sort-orders":           []any{map[string]any{"order-id": 0, "fields": []any{}}},
 		"default-sort-order-id": 0,
-		"snapshots":            []any{},
-		"snapshot-log":         []any{},
-		"refs":                 map[string]any{},
+		"snapshots":             []any{},
+		"snapshot-log":          []any{},
+		"refs":                  map[string]any{},
 	}
 
 	b.ReportAllocs()
@@ -59,20 +59,20 @@ func BenchmarkBaselineTableMetadataSerialization(b *testing.B) {
 // BenchmarkBaselineTableMetadataLargeSchema measures allocations for large schemas (100+ columns).
 func BenchmarkBaselineTableMetadataLargeSchema(b *testing.B) {
 	metadata := map[string]any{
-		"format-version":       2,
-		"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-		"location":             "s3://warehouse/default/large_table",
-		"last-updated-ms":      1703376000000,
-		"properties":           map[string]string{"owner": "test"},
-		"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(100)}},
-		"current-schema-id":    0,
-		"partition-specs":      []any{},
-		"default-spec-id":      0,
-		"sort-orders":          []any{},
+		"format-version":        2,
+		"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
+		"location":              "s3://warehouse/default/large_table",
+		"last-updated-ms":       1703376000000,
+		"properties":            map[string]string{"owner": "test"},
+		"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(100)}},
+		"current-schema-id":     0,
+		"partition-specs":       []any{},
+		"default-spec-id":       0,
+		"sort-orders":           []any{},
 		"default-sort-order-id": 0,
-		"snapshots":            generateSnapshots(10),
-		"snapshot-log":         []any{},
-		"refs":                 map[string]any{"main": map[string]any{"snapshot-id": 1}},
+		"snapshots":             generateSnapshots(10),
+		"snapshot-log":          []any{},
+		"refs":                  map[string]any{"main": map[string]any{"snapshot-id": 1}},
 	}
 
 	b.ReportAllocs()
@@ -106,20 +106,20 @@ func BenchmarkBaselineTokenGeneration(b *testing.B) {
 // BenchmarkBaselineGCPressureSerialization measures GC pressure from repeated serialization.
 func BenchmarkBaselineGCPressureSerialization(b *testing.B) {
 	metadata := map[string]any{
-		"format-version":       2,
-		"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-		"location":             "s3://warehouse/default/test_table",
-		"last-updated-ms":      1703376000000,
-		"properties":           map[string]string{"owner": "test"},
-		"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
-		"current-schema-id":    0,
-		"partition-specs":      []any{},
-		"default-spec-id":      0,
-		"sort-orders":          []any{},
+		"format-version":        2,
+		"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
+		"location":              "s3://warehouse/default/test_table",
+		"last-updated-ms":       1703376000000,
+		"properties":            map[string]string{"owner": "test"},
+		"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
+		"current-schema-id":     0,
+		"partition-specs":       []any{},
+		"default-spec-id":       0,
+		"sort-orders":           []any{},
 		"default-sort-order-id": 0,
-		"snapshots":            []any{},
-		"snapshot-log":         []any{},
-		"refs":                 map[string]any{},
+		"snapshots":             []any{},
+		"snapshot-log":          []any{},
+		"refs":                  map[string]any{},
 	}
 
 	// Force GC and get baseline
@@ -157,20 +157,20 @@ func BenchmarkBaselineGCPressureSerialization(b *testing.B) {
 // BenchmarkBaselineMemoryStabilitySerialization measures heap growth from repeated serialization.
 func BenchmarkBaselineMemoryStabilitySerialization(b *testing.B) {
 	metadata := map[string]any{
-		"format-version":       2,
-		"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-		"location":             "s3://warehouse/default/test_table",
-		"last-updated-ms":      1703376000000,
-		"properties":           map[string]string{"owner": "test"},
-		"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
-		"current-schema-id":    0,
-		"partition-specs":      []any{},
-		"default-spec-id":      0,
-		"sort-orders":          []any{},
+		"format-version":        2,
+		"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
+		"location":              "s3://warehouse/default/test_table",
+		"last-updated-ms":       1703376000000,
+		"properties":            map[string]string{"owner": "test"},
+		"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
+		"current-schema-id":     0,
+		"partition-specs":       []any{},
+		"default-spec-id":       0,
+		"sort-orders":           []any{},
 		"default-sort-order-id": 0,
-		"snapshots":            []any{},
-		"snapshot-log":         []any{},
-		"refs":                 map[string]any{},
+		"snapshots":             []any{},
+		"snapshot-log":          []any{},
+		"refs":                  map[string]any{},
 	}
 
 	// Force GC and get baseline
@@ -223,12 +223,12 @@ func generateSnapshots(count int) []any {
 	snapshots := make([]any, count)
 	for i := 0; i < count; i++ {
 		snapshots[i] = map[string]any{
-			"snapshot-id":        int64(i + 1),
-			"timestamp-ms":       1703376000000 + int64(i*1000),
-			"summary":            map[string]any{"operation": "append"},
-			"manifest-list":      "s3://warehouse/default/test/metadata/snap-" + string(rune('0'+i)),
-			"sequence-number":    int64(i + 1),
-			"schema-id":          0,
+			"snapshot-id":     int64(i + 1),
+			"timestamp-ms":    1703376000000 + int64(i*1000),
+			"summary":         map[string]any{"operation": "append"},
+			"manifest-list":   "s3://warehouse/default/test/metadata/snap-" + string(rune('0'+i)),
+			"sequence-number": int64(i + 1),
+			"schema-id":       0,
 		}
 	}
 	return snapshots

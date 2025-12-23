@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"runtime"
 	"testing"
@@ -17,7 +18,7 @@ func BenchmarkMemoryAllocation(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/health", nil)
+		req := httptest.NewRequest("GET", "/health", http.NoBody)
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
 			b.Fatal(err)
@@ -35,7 +36,7 @@ func BenchmarkMemoryAllocationConfig(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/v1/config", nil)
+		req := httptest.NewRequest("GET", "/v1/config", http.NoBody)
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
@@ -54,7 +55,7 @@ func BenchmarkMemoryAllocationNamespaces(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/v1/namespaces", nil)
+		req := httptest.NewRequest("GET", "/v1/namespaces", http.NoBody)
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
@@ -77,7 +78,7 @@ func BenchmarkMemoryUnderLoad(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/health", nil)
+		req := httptest.NewRequest("GET", "/health", http.NoBody)
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
 			b.Fatal(err)
@@ -110,7 +111,7 @@ func BenchmarkMemoryMetrics(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/metrics", nil)
+		req := httptest.NewRequest("GET", "/metrics", http.NoBody)
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
 			b.Fatal(err)
@@ -132,7 +133,7 @@ func BenchmarkGCPressure(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/health", nil)
+		req := httptest.NewRequest("GET", "/health", http.NoBody)
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
 			b.Fatal(err)
@@ -162,7 +163,7 @@ func BenchmarkLargeResponseMemory(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/metrics", nil)
+		req := httptest.NewRequest("GET", "/metrics", http.NoBody)
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
 			b.Fatal(err)

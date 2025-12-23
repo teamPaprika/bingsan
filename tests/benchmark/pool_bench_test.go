@@ -25,20 +25,20 @@ import (
 // BenchmarkPoolTableMetadataSerialization measures JSON serialization with pooled buffers.
 func BenchmarkPoolTableMetadataSerialization(b *testing.B) {
 	metadata := map[string]any{
-		"format-version":       2,
-		"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-		"location":             "s3://warehouse/default/test_table",
-		"last-updated-ms":      1703376000000,
-		"properties":           map[string]string{"owner": "test", "created-by": "bingsan"},
-		"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
-		"current-schema-id":    0,
-		"partition-specs":      []any{map[string]any{"spec-id": 0, "fields": []any{}}},
-		"default-spec-id":      0,
-		"sort-orders":          []any{map[string]any{"order-id": 0, "fields": []any{}}},
+		"format-version":        2,
+		"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
+		"location":              "s3://warehouse/default/test_table",
+		"last-updated-ms":       1703376000000,
+		"properties":            map[string]string{"owner": "test", "created-by": "bingsan"},
+		"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
+		"current-schema-id":     0,
+		"partition-specs":       []any{map[string]any{"spec-id": 0, "fields": []any{}}},
+		"default-spec-id":       0,
+		"sort-orders":           []any{map[string]any{"order-id": 0, "fields": []any{}}},
 		"default-sort-order-id": 0,
-		"snapshots":            []any{},
-		"snapshot-log":         []any{},
-		"refs":                 map[string]any{},
+		"snapshots":             []any{},
+		"snapshot-log":          []any{},
+		"refs":                  map[string]any{},
 	}
 
 	bp := pool.NewBufferPool(nil) // No metrics overhead for benchmark
@@ -60,20 +60,20 @@ func BenchmarkPoolTableMetadataSerialization(b *testing.B) {
 // BenchmarkPoolTableMetadataLargeSchema measures large schema serialization with pooled buffers.
 func BenchmarkPoolTableMetadataLargeSchema(b *testing.B) {
 	metadata := map[string]any{
-		"format-version":       2,
-		"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-		"location":             "s3://warehouse/default/large_table",
-		"last-updated-ms":      1703376000000,
-		"properties":           map[string]string{"owner": "test"},
-		"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(100)}},
-		"current-schema-id":    0,
-		"partition-specs":      []any{},
-		"default-spec-id":      0,
-		"sort-orders":          []any{},
+		"format-version":        2,
+		"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
+		"location":              "s3://warehouse/default/large_table",
+		"last-updated-ms":       1703376000000,
+		"properties":            map[string]string{"owner": "test"},
+		"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(100)}},
+		"current-schema-id":     0,
+		"partition-specs":       []any{},
+		"default-spec-id":       0,
+		"sort-orders":           []any{},
 		"default-sort-order-id": 0,
-		"snapshots":            generateSnapshots(10),
-		"snapshot-log":         []any{},
-		"refs":                 map[string]any{"main": map[string]any{"snapshot-id": 1}},
+		"snapshots":             generateSnapshots(10),
+		"snapshot-log":          []any{},
+		"refs":                  map[string]any{"main": map[string]any{"snapshot-id": 1}},
 	}
 
 	bp := pool.NewBufferPool(nil)
@@ -203,20 +203,20 @@ func BenchmarkPoolUnderSustainedLoad(b *testing.B) {
 // BenchmarkNoPoolSerializationForComparison provides direct comparison baseline.
 func BenchmarkNoPoolSerializationForComparison(b *testing.B) {
 	metadata := map[string]any{
-		"format-version":       2,
-		"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-		"location":             "s3://warehouse/default/test_table",
-		"last-updated-ms":      1703376000000,
-		"properties":           map[string]string{"owner": "test", "created-by": "bingsan"},
-		"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
-		"current-schema-id":    0,
-		"partition-specs":      []any{map[string]any{"spec-id": 0, "fields": []any{}}},
-		"default-spec-id":      0,
-		"sort-orders":          []any{map[string]any{"order-id": 0, "fields": []any{}}},
+		"format-version":        2,
+		"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
+		"location":              "s3://warehouse/default/test_table",
+		"last-updated-ms":       1703376000000,
+		"properties":            map[string]string{"owner": "test", "created-by": "bingsan"},
+		"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
+		"current-schema-id":     0,
+		"partition-specs":       []any{map[string]any{"spec-id": 0, "fields": []any{}}},
+		"default-spec-id":       0,
+		"sort-orders":           []any{map[string]any{"order-id": 0, "fields": []any{}}},
 		"default-sort-order-id": 0,
-		"snapshots":            []any{},
-		"snapshot-log":         []any{},
-		"refs":                 map[string]any{},
+		"snapshots":             []any{},
+		"snapshot-log":          []any{},
+		"refs":                  map[string]any{},
 	}
 
 	b.ReportAllocs()
@@ -260,13 +260,13 @@ func BenchmarkPoolMemoryStability(b *testing.B) {
 	bytePool := pool.NewBytePool(pool.TokenSize, nil)
 
 	metadata := map[string]any{
-		"format-version":       2,
-		"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-		"location":             "s3://warehouse/default/test_table",
-		"last-updated-ms":      1703376000000,
-		"properties":           map[string]string{"owner": "test"},
-		"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
-		"current-schema-id":    0,
+		"format-version":    2,
+		"table-uuid":        "550e8400-e29b-41d4-a716-446655440000",
+		"location":          "s3://warehouse/default/test_table",
+		"last-updated-ms":   1703376000000,
+		"properties":        map[string]string{"owner": "test"},
+		"schemas":           []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
+		"current-schema-id": 0,
 	}
 
 	b.ReportAllocs()
@@ -276,11 +276,11 @@ func BenchmarkPoolMemoryStability(b *testing.B) {
 		// Simulate mixed workload
 		buf := bp.Get()
 		encoder := json.NewEncoder(buf)
-		_ = encoder.Encode(metadata)
+		_ = encoder.Encode(metadata) //nolint:errcheck // benchmark
 		bp.Put(buf)
 
 		slice := bytePool.Get()
-		_, _ = rand.Read(slice)
+		_, _ = rand.Read(slice) //nolint:errcheck // benchmark
 		bytePool.Put(slice)
 	}
 }
@@ -290,13 +290,13 @@ func BenchmarkPoolGCPressure(b *testing.B) {
 	bp := pool.NewBufferPool(nil)
 
 	metadata := map[string]any{
-		"format-version":       2,
-		"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-		"location":             "s3://warehouse/default/test_table",
-		"last-updated-ms":      1703376000000,
-		"properties":           map[string]string{"owner": "test"},
-		"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
-		"current-schema-id":    0,
+		"format-version":    2,
+		"table-uuid":        "550e8400-e29b-41d4-a716-446655440000",
+		"location":          "s3://warehouse/default/test_table",
+		"last-updated-ms":   1703376000000,
+		"properties":        map[string]string{"owner": "test"},
+		"schemas":           []any{map[string]any{"type": "struct", "schema-id": 0, "fields": generateFields(20)}},
+		"current-schema-id": 0,
 	}
 
 	b.ReportAllocs()
@@ -305,13 +305,13 @@ func BenchmarkPoolGCPressure(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		buf := bp.Get()
 		encoder := json.NewEncoder(buf)
-		_ = encoder.Encode(metadata)
+		_ = encoder.Encode(metadata) //nolint:errcheck // benchmark
 		bp.Put(buf)
 	}
 }
 
 // =============================================================================
-// Concurrent Benchmark Helpers
+// Concurrent Benchmark Helpers.
 // =============================================================================
 
 // BenchmarkPoolVsNoPoolConcurrent compares pooled vs non-pooled under concurrent load.

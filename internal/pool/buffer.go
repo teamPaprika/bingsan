@@ -25,18 +25,21 @@ var bufferPool = sync.Pool{
 // BufferPool provides access to a pool of reusable byte buffers.
 // Use this for JSON serialization in handlers to reduce allocations.
 type BufferPool struct {
-	metrics *PoolMetrics
+	metrics *Metrics
 }
 
 // NewBufferPool creates a new BufferPool with optional metrics tracking.
-func NewBufferPool(metrics *PoolMetrics) *BufferPool {
+func NewBufferPool(metrics *Metrics) *BufferPool {
 	return &BufferPool{metrics: metrics}
 }
 
 // Get retrieves a buffer from the pool.
 // The buffer is reset and ready for use.
 func (p *BufferPool) Get() *bytes.Buffer {
-	buf := bufferPool.Get().(*bytes.Buffer)
+	buf, ok := bufferPool.Get().(*bytes.Buffer)
+	if !ok {
+		panic("pool: invalid buffer type")
+	}
 	buf.Reset()
 
 	if p.metrics != nil {
@@ -74,7 +77,10 @@ func (p *BufferPool) Put(buf *bytes.Buffer) {
 // GetBuffer is a convenience function that gets a buffer from the default pool.
 // For high-performance code, use NewBufferPool with metrics.
 func GetBuffer() *bytes.Buffer {
-	buf := bufferPool.Get().(*bytes.Buffer)
+	buf, ok := bufferPool.Get().(*bytes.Buffer)
+	if !ok {
+		panic("pool: invalid buffer type")
+	}
 	buf.Reset()
 	return buf
 }

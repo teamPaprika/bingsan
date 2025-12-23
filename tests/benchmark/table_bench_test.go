@@ -3,6 +3,7 @@ package benchmark
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -17,7 +18,7 @@ func BenchmarkListTables(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/v1/namespaces/bench_ns/tables", nil)
+		req := httptest.NewRequest("GET", "/v1/namespaces/bench_ns/tables", http.NoBody)
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
@@ -35,7 +36,7 @@ func BenchmarkListTablesParallel(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			req := httptest.NewRequest("GET", "/v1/namespaces/bench_ns/tables", nil)
+			req := httptest.NewRequest("GET", "/v1/namespaces/bench_ns/tables", http.NoBody)
 			req.Header.Set("Content-Type", "application/json")
 			resp, err := server.App().Test(req, -1)
 			if err != nil {
@@ -53,7 +54,7 @@ func BenchmarkGetTableMetadata(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/v1/namespaces/bench_ns/tables/bench_table", nil)
+		req := httptest.NewRequest("GET", "/v1/namespaces/bench_ns/tables/bench_table", http.NoBody)
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
@@ -70,7 +71,7 @@ func BenchmarkTableExists(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("HEAD", "/v1/namespaces/bench_ns/tables/bench_table", nil)
+		req := httptest.NewRequest("HEAD", "/v1/namespaces/bench_ns/tables/bench_table", http.NoBody)
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
 			b.Fatal(err)
@@ -118,7 +119,7 @@ func BenchmarkCreateTableRequest(b *testing.B) {
 // =============================================================================
 
 // BenchmarkTableLoadLatency measures table load operation latency.
-// Target: p50 < 50ms, p95 < 100ms, p99 < 200ms
+// Target: p50 < 50ms, p95 < 100ms, p99 < 200ms.
 func BenchmarkTableLoadLatency(b *testing.B) {
 	bp := pool.NewBufferPool(nil)
 
@@ -156,7 +157,7 @@ func BenchmarkTableLoadLatency(b *testing.B) {
 }
 
 // BenchmarkTableLargeSchemaLatency measures operations on tables with 100+ columns.
-// Target: < 200ms for large schemas
+// Target: < 200ms for large schemas.
 func BenchmarkTableLargeSchemaLatency(b *testing.B) {
 	bp := pool.NewBufferPool(nil)
 
@@ -194,7 +195,7 @@ func BenchmarkTableLargeSchemaLatency(b *testing.B) {
 }
 
 // BenchmarkTableSerializationLatency measures pure serialization latency.
-// Target: < 1ms
+// Target: < 1ms.
 func BenchmarkTableSerializationLatency(b *testing.B) {
 	bp := pool.NewBufferPool(nil)
 
@@ -227,7 +228,7 @@ func BenchmarkTableSerializationLatency(b *testing.B) {
 }
 
 // BenchmarkTableCommitLatency measures table commit operation latency.
-// Target: < 50ms average
+// Target: < 50ms average.
 func BenchmarkTableCommitLatency(b *testing.B) {
 	bp := pool.NewBufferPool(nil)
 

@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ func BenchmarkHealthEndpoint(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			req := httptest.NewRequest("GET", "/health", nil)
+			req := httptest.NewRequest("GET", "/health", http.NoBody)
 			resp, err := server.App().Test(req, -1)
 			if err != nil {
 				b.Fatal(err)
@@ -35,7 +36,7 @@ func BenchmarkReadyEndpoint(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			req := httptest.NewRequest("GET", "/ready", nil)
+			req := httptest.NewRequest("GET", "/ready", http.NoBody)
 			resp, err := server.App().Test(req, -1)
 			if err != nil {
 				b.Fatal(err)
@@ -52,7 +53,7 @@ func BenchmarkMetricsEndpoint(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/metrics", nil)
+		req := httptest.NewRequest("GET", "/metrics", http.NoBody)
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
 			b.Fatal(err)
@@ -71,7 +72,7 @@ func BenchmarkHealthEndpointLatency(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		start := time.Now()
-		req := httptest.NewRequest("GET", "/health", nil)
+		req := httptest.NewRequest("GET", "/health", http.NoBody)
 		resp, err := server.App().Test(req, -1)
 		latency := time.Since(start)
 		if err != nil {

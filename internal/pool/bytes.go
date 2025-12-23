@@ -20,11 +20,11 @@ var bytePool = sync.Pool{
 // Use this for token generation to reduce allocations.
 type BytePool struct {
 	size    int
-	metrics *PoolMetrics
+	metrics *Metrics
 }
 
 // NewBytePool creates a new BytePool for slices of the specified size.
-func NewBytePool(size int, metrics *PoolMetrics) *BytePool {
+func NewBytePool(size int, metrics *Metrics) *BytePool {
 	return &BytePool{
 		size:    size,
 		metrics: metrics,
@@ -42,7 +42,10 @@ func (p *BytePool) Get() []byte {
 		return make([]byte, p.size)
 	}
 
-	slice := bytePool.Get().([]byte)
+	slice, ok := bytePool.Get().([]byte)
+	if !ok {
+		panic("pool: invalid byte slice type")
+	}
 
 	if p.metrics != nil {
 		p.metrics.RecordGet("bytes")
@@ -61,7 +64,7 @@ func (p *BytePool) Put(slice []byte) {
 		return
 	}
 
-	bytePool.Put(slice)
+	bytePool.Put(slice) //nolint:staticcheck // SA6002: slice is acceptable for sync.Pool
 
 	if p.metrics != nil {
 		p.metrics.RecordReturn("bytes")
@@ -71,7 +74,11 @@ func (p *BytePool) Put(slice []byte) {
 // GetBytes is a convenience function that gets a token-sized byte slice.
 // For high-performance code, use NewBytePool with metrics.
 func GetBytes() []byte {
-	return bytePool.Get().([]byte)
+	slice, ok := bytePool.Get().([]byte)
+	if !ok {
+		panic("pool: invalid byte slice type")
+	}
+	return slice
 }
 
 // PutBytes returns a byte slice to the default pool.
@@ -80,5 +87,5 @@ func PutBytes(slice []byte) {
 	if slice == nil || len(slice) != TokenSize {
 		return
 	}
-	bytePool.Put(slice)
+	bytePool.Put(slice) //nolint:staticcheck // SA6002: slice is acceptable for sync.Pool
 }

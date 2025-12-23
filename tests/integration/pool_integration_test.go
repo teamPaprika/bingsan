@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kimuyb/bingsan/internal/pool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kimuyb/bingsan/internal/pool"
 )
 
 // TestPoolIntegration tests the pool package under realistic conditions.
@@ -133,16 +134,16 @@ func TestPoolIntegration(t *testing.T) {
 
 		// Simulate typical API handler workload
 		metadata := map[string]any{
-			"format-version":       2,
-			"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-			"location":             "s3://warehouse/default/test_table",
-			"last-updated-ms":      time.Now().UnixMilli(),
-			"properties":           map[string]string{"owner": "test"},
-			"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0}},
-			"current-schema-id":    0,
-			"partition-specs":      []any{},
-			"default-spec-id":      0,
-			"sort-orders":          []any{},
+			"format-version":        2,
+			"table-uuid":            "550e8400-e29b-41d4-a716-446655440000",
+			"location":              "s3://warehouse/default/test_table",
+			"last-updated-ms":       time.Now().UnixMilli(),
+			"properties":            map[string]string{"owner": "test"},
+			"schemas":               []any{map[string]any{"type": "struct", "schema-id": 0}},
+			"current-schema-id":     0,
+			"partition-specs":       []any{},
+			"default-spec-id":       0,
+			"sort-orders":           []any{},
 			"default-sort-order-id": 0,
 		}
 
@@ -159,8 +160,8 @@ func TestPoolIntegration(t *testing.T) {
 					// Simulate table metadata serialization
 					buf := bp.Get()
 					encoder := json.NewEncoder(buf)
-					_ = encoder.Encode(metadata)
-					_ = buf.Bytes() // simulate sending response
+					_ = encoder.Encode(metadata) //nolint:errcheck // test code
+					_ = buf.Bytes()              // simulate sending response
 					bp.Put(buf)
 
 					// Simulate token generation (occasionally)
@@ -186,12 +187,12 @@ func TestPoolMemoryEfficiency(t *testing.T) {
 	bp := pool.NewBufferPool(nil)
 
 	metadata := map[string]any{
-		"format-version":       2,
-		"table-uuid":           "550e8400-e29b-41d4-a716-446655440000",
-		"location":             "s3://warehouse/default/test_table",
-		"last-updated-ms":      time.Now().UnixMilli(),
-		"properties":           map[string]string{"owner": "test"},
-		"schemas":              []any{map[string]any{"type": "struct", "schema-id": 0}},
+		"format-version":  2,
+		"table-uuid":      "550e8400-e29b-41d4-a716-446655440000",
+		"location":        "s3://warehouse/default/test_table",
+		"last-updated-ms": time.Now().UnixMilli(),
+		"properties":      map[string]string{"owner": "test"},
+		"schemas":         []any{map[string]any{"type": "struct", "schema-id": 0}},
 	}
 
 	// Record initial memory
@@ -203,7 +204,7 @@ func TestPoolMemoryEfficiency(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		buf := bp.Get()
 		encoder := json.NewEncoder(buf)
-		_ = encoder.Encode(metadata)
+		_ = encoder.Encode(metadata) //nolint:errcheck // test code
 		_ = buf.Bytes()
 		bp.Put(buf)
 	}

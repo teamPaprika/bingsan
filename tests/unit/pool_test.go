@@ -5,9 +5,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kimuyb/bingsan/internal/pool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kimuyb/bingsan/internal/pool"
 )
 
 // =============================================================================
@@ -79,6 +80,7 @@ func TestBufferPoolNilSafe(t *testing.T) {
 
 	// Put nil should not panic
 	bp.Put(nil)
+	assert.True(t, true, "nil put should not panic")
 }
 
 func TestBufferPoolConcurrent(t *testing.T) {
@@ -166,6 +168,7 @@ func TestBytePoolNilSafe(t *testing.T) {
 
 	// Put nil should not panic
 	bp.Put(nil)
+	assert.True(t, true, "nil put should not panic")
 }
 
 func TestBytePoolConcurrent(t *testing.T) {
@@ -236,7 +239,7 @@ func TestPoolStatsHitRate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stats := pool.PoolStats{
+			stats := pool.Stats{
 				Gets:   tt.gets,
 				Misses: tt.misses,
 			}

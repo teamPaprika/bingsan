@@ -42,46 +42,46 @@ var (
 	}, []string{"pool"})
 )
 
-// PoolMetrics tracks pool utilization for observability.
-type PoolMetrics struct {
+// Metrics tracks pool utilization for observability.
+type Metrics struct {
 	gets     atomic.Uint64
 	returns  atomic.Uint64
 	discards atomic.Uint64
 	misses   atomic.Uint64
 }
 
-// NewPoolMetrics creates a new PoolMetrics instance.
-func NewPoolMetrics() *PoolMetrics {
-	return &PoolMetrics{}
+// NewPoolMetrics creates a new Metrics instance.
+func NewPoolMetrics() *Metrics {
+	return &Metrics{}
 }
 
 // RecordGet increments the get counter for a pool.
-func (m *PoolMetrics) RecordGet(pool string) {
+func (m *Metrics) RecordGet(pool string) {
 	m.gets.Add(1)
 	poolGets.WithLabelValues(pool).Inc()
 }
 
 // RecordReturn increments the return counter for a pool.
-func (m *PoolMetrics) RecordReturn(pool string) {
+func (m *Metrics) RecordReturn(pool string) {
 	m.returns.Add(1)
 	poolReturns.WithLabelValues(pool).Inc()
 }
 
 // RecordDiscard increments the discard counter for a pool.
-func (m *PoolMetrics) RecordDiscard(pool string) {
+func (m *Metrics) RecordDiscard(pool string) {
 	m.discards.Add(1)
 	poolDiscards.WithLabelValues(pool).Inc()
 }
 
 // RecordMiss increments the miss counter for a pool.
-func (m *PoolMetrics) RecordMiss(pool string) {
+func (m *Metrics) RecordMiss(pool string) {
 	m.misses.Add(1)
 	poolMisses.WithLabelValues(pool).Inc()
 }
 
 // Stats returns current pool statistics.
-func (m *PoolMetrics) Stats() PoolStats {
-	return PoolStats{
+func (m *Metrics) Stats() Stats {
+	return Stats{
 		Gets:     m.gets.Load(),
 		Returns:  m.returns.Load(),
 		Discards: m.discards.Load(),
@@ -89,18 +89,16 @@ func (m *PoolMetrics) Stats() PoolStats {
 	}
 }
 
-// PoolStats contains pool utilization statistics.
-type PoolStats struct {
+// Stats contains pool utilization statistics.
+type Stats struct {
 	Gets     uint64
 	Returns  uint64
 	Discards uint64
 	Misses   uint64
 }
 
-// HitRate calculates the estimated hit rate.
-// Note: This is an approximation since sync.Pool doesn't track hits directly.
-// Hit rate = (gets - misses) / gets
-func (s PoolStats) HitRate() float64 {
+// HitRate calculates the estimated hit rate based on gets minus misses.
+func (s Stats) HitRate() float64 {
 	if s.Gets == 0 {
 		return 0
 	}
