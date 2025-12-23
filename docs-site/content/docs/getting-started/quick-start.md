@@ -1,0 +1,110 @@
+---
+title: "Quick Start"
+weight: 1
+---
+
+# Quick Start
+
+Get Bingsan running in under 5 minutes using Docker Compose.
+
+## Prerequisites
+
+- Docker Engine 20.10+
+- Docker Compose v2.0+
+
+## Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/kimuyb/bingsan.git
+cd bingsan
+```
+
+## Step 2: Configure
+
+Copy the example configuration file:
+
+```bash
+cp config.example.yaml config.yaml
+```
+
+The default configuration works out of the box for local development. For production, see the [Configuration Guide]({{< relref "/docs/configuration" >}}).
+
+## Step 3: Start with Docker Compose
+
+```bash
+docker compose -f deployments/docker/docker-compose.yml up -d
+```
+
+This starts:
+- **Bingsan** - REST catalog server on port 8181
+- **PostgreSQL** - Metadata database on port 5432
+
+## Step 4: Verify Installation
+
+Check the health endpoint:
+
+```bash
+curl http://localhost:8181/health
+```
+
+Expected response:
+```json
+{"status": "ok"}
+```
+
+Check readiness (includes database connectivity):
+
+```bash
+curl http://localhost:8181/ready
+```
+
+Expected response:
+```json
+{"status": "ready", "database": "connected"}
+```
+
+## Step 5: Create Your First Namespace
+
+```bash
+curl -X POST http://localhost:8181/v1/namespaces \
+  -H "Content-Type: application/json" \
+  -d '{
+    "namespace": ["analytics"],
+    "properties": {
+      "owner": "data-team"
+    }
+  }'
+```
+
+## Step 6: List Namespaces
+
+```bash
+curl http://localhost:8181/v1/namespaces
+```
+
+Response:
+```json
+{
+  "namespaces": [
+    ["analytics"]
+  ]
+}
+```
+
+## Next Steps
+
+- [Create your first table]({{< relref "/docs/getting-started/first-steps" >}})
+- [Learn about all API endpoints]({{< relref "/docs/api" >}})
+- [Configure for production]({{< relref "/docs/configuration" >}})
+
+## Stopping the Services
+
+```bash
+docker compose -f deployments/docker/docker-compose.yml down
+```
+
+To also remove the data volumes:
+
+```bash
+docker compose -f deployments/docker/docker-compose.yml down -v
+```
