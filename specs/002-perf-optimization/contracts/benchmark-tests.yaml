@@ -1,0 +1,122 @@
+# Benchmark Test Contracts
+# Feature: 002-perf-optimization
+# Purpose: Define expected benchmark behaviors and success criteria
+
+benchmarks:
+  # Baseline benchmarks (run before implementation)
+  baseline:
+    - name: BenchmarkTableLoadBaseline
+      file: tests/benchmark/table_bench_test.go
+      operations:
+        - LoadTable metadata serialization
+      metrics:
+        - allocs/op: record baseline
+        - ns/op: record baseline
+        - B/op: record baseline
+
+    - name: BenchmarkViewLoadBaseline
+      file: tests/benchmark/table_bench_test.go
+      operations:
+        - LoadView metadata serialization
+      metrics:
+        - allocs/op: record baseline
+        - ns/op: record baseline
+
+    - name: BenchmarkTokenGenerationBaseline
+      file: tests/benchmark/concurrent_bench_test.go
+      operations:
+        - Random byte slice allocation
+      metrics:
+        - allocs/op: record baseline
+
+  # Pool-enabled benchmarks (run after implementation)
+  optimized:
+    - name: BenchmarkTableLoadWithPool
+      file: tests/benchmark/pool_bench_test.go
+      operations:
+        - LoadTable with buffer pool
+      success_criteria:
+        - allocs/op: >= 30% reduction vs baseline
+        - ns/op: <= baseline (no regression)
+        - B/op: >= 30% reduction vs baseline
+
+    - name: BenchmarkViewLoadWithPool
+      file: tests/benchmark/pool_bench_test.go
+      operations:
+        - LoadView with buffer pool
+      success_criteria:
+        - allocs/op: >= 30% reduction vs baseline
+        - ns/op: <= baseline
+
+    - name: BenchmarkTokenGenerationWithPool
+      file: tests/benchmark/pool_bench_test.go
+      operations:
+        - Token generation with byte pool
+      success_criteria:
+        - allocs/op: >= 50% reduction (fixed size, highly reusable)
+
+  # Concurrent benchmarks
+  concurrent:
+    - name: BenchmarkPoolConcurrentAccess
+      file: tests/benchmark/pool_bench_test.go
+      goroutines: [1, 10, 100, 1000]
+      operations:
+        - Concurrent Get/Put cycles
+      success_criteria:
+        - no race conditions (go test -race)
+        - linear scaling up to GOMAXPROCS
+
+    - name: BenchmarkPoolUnderLoad
+      file: tests/benchmark/pool_bench_test.go
+      duration: 10s
+      operations:
+        - Sustained high-frequency pool access
+      success_criteria:
+        - hit_rate: >= 80%
+        - no goroutine leaks
+
+  # Memory stability benchmarks
+  memory:
+    - name: BenchmarkPoolMemoryStability
+      file: tests/benchmark/memory_bench_test.go
+      iterations: 1_000_000
+      operations:
+        - Repeated Get/Put cycles
+      success_criteria:
+        - heap_inuse: stable (no growth trend)
+        - gc_pause_p99: < 10ms
+
+# Unit test contracts
+unit_tests:
+  - name: TestBufferPoolGetPut
+    file: tests/unit/pool_test.go
+    cases:
+      - Get returns valid buffer
+      - Put accepts used buffer
+      - Reset clears buffer contents
+      - Oversized buffers discarded
+
+  - name: TestBytePoolGetPut
+    file: tests/unit/pool_test.go
+    cases:
+      - Get returns correct size slice
+      - Put accepts used slice
+      - Slice contents overwritten on reuse
+
+  - name: TestPoolMetrics
+    file: tests/unit/pool_test.go
+    cases:
+      - Hits counter increments on pool hit
+      - Misses counter increments on pool miss
+      - Returns counter increments on put
+      - Discards counter increments on oversized
+
+# Integration test contracts
+integration_tests:
+  - name: TestHandlersWithPool
+    file: tests/integration/pool_integration_test.go
+    cases:
+      - Table handlers use buffer pool
+      - View handlers use buffer pool
+      - OAuth handler uses byte pool
+      - No memory leaks after 10k requests

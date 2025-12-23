@@ -1,0 +1,57 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kimuyb/bingsan/tests/benchmark
+cpu: Apple M3 Pro
+BenchmarkPoolTableMetadataSerialization-12        	  104328	     10729 ns/op	    7448 B/op	     231 allocs/op
+BenchmarkPoolTableMetadataSerialization-12        	  111001	     10733 ns/op	    7447 B/op	     231 allocs/op
+BenchmarkPoolTableMetadataSerialization-12        	  111540	     10711 ns/op	    7448 B/op	     231 allocs/op
+BenchmarkPoolTableMetadataLargeSchema-12          	   23924	     50458 ns/op	   35447 B/op	    1105 allocs/op
+BenchmarkPoolTableMetadataLargeSchema-12          	   23893	     50258 ns/op	   35445 B/op	    1105 allocs/op
+BenchmarkPoolTableMetadataLargeSchema-12          	   23786	     50394 ns/op	   35447 B/op	    1105 allocs/op
+BenchmarkPoolTokenGeneration-12                   	 4341837	       278.3 ns/op	     152 B/op	       3 allocs/op
+BenchmarkPoolTokenGeneration-12                   	 4358784	       276.6 ns/op	     152 B/op	       3 allocs/op
+BenchmarkPoolTokenGeneration-12                   	 4342772	       277.3 ns/op	     152 B/op	       3 allocs/op
+BenchmarkPoolConcurrentAccess-12                  	640018203	         1.739 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolConcurrentAccess-12                  	678416623	         1.741 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolConcurrentAccess-12                  	782955492	         1.663 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolConcurrent10-12                      	808745738	         1.414 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolConcurrent10-12                      	832158775	         1.551 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolConcurrent10-12                      	814549970	         1.409 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolConcurrent100-12                     	917787880	         1.260 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolConcurrent100-12                     	914415474	         1.286 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolConcurrent100-12                     	886437232	         1.285 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolUnderSustainedLoad-12                	20798757	        56.11 ns/op	       100.0 %_returned	       0 B/op	       0 allocs/op
+BenchmarkPoolUnderSustainedLoad-12                	21377908	        56.14 ns/op	       100.0 %_returned	       0 B/op	       0 allocs/op
+BenchmarkPoolUnderSustainedLoad-12                	21003745	        56.08 ns/op	       100.0 %_returned	       0 B/op	       0 allocs/op
+BenchmarkNoPoolSerializationForComparison-12      	   96690	     12366 ns/op	   11594 B/op	     233 allocs/op
+BenchmarkNoPoolSerializationForComparison-12      	   98485	     12346 ns/op	   11594 B/op	     233 allocs/op
+BenchmarkNoPoolSerializationForComparison-12      	   97500	     12380 ns/op	   11595 B/op	     233 allocs/op
+BenchmarkNoPoolTokenGenerationForComparison-12    	 4503084	       267.1 ns/op	     128 B/op	       2 allocs/op
+BenchmarkNoPoolTokenGenerationForComparison-12    	 4487840	       266.8 ns/op	     128 B/op	       2 allocs/op
+BenchmarkNoPoolTokenGenerationForComparison-12    	 4509342	       266.6 ns/op	     128 B/op	       2 allocs/op
+BenchmarkPoolMemoryStability-12                   	  118405	     10254 ns/op	    6617 B/op	     206 allocs/op
+BenchmarkPoolMemoryStability-12                   	  117655	     10249 ns/op	    6617 B/op	     206 allocs/op
+BenchmarkPoolMemoryStability-12                   	  117354	     10282 ns/op	    6617 B/op	     206 allocs/op
+BenchmarkPoolGCPressure-12                        	  120811	      9935 ns/op	    6585 B/op	     205 allocs/op
+BenchmarkPoolGCPressure-12                        	  119332	      9922 ns/op	    6585 B/op	     205 allocs/op
+BenchmarkPoolGCPressure-12                        	  121252	      9979 ns/op	    6585 B/op	     205 allocs/op
+BenchmarkPoolVsNoPoolConcurrent/WithPool-12       	578499116	         1.797 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolVsNoPoolConcurrent/WithPool-12       	714816686	         1.849 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolVsNoPoolConcurrent/WithPool-12       	845493913	         1.551 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolVsNoPoolConcurrent/WithoutPool-12    	 2011422	       608.7 ns/op	    4096 B/op	       1 allocs/op
+BenchmarkPoolVsNoPoolConcurrent/WithoutPool-12    	 1954092	       598.8 ns/op	    4096 B/op	       1 allocs/op
+BenchmarkPoolVsNoPoolConcurrent/WithoutPool-12    	 1956925	       574.7 ns/op	    4096 B/op	       1 allocs/op
+BenchmarkPoolMultiGoroutine/001_goroutines-12     	100000000	        10.19 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/001_goroutines-12     	100000000	        10.19 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/001_goroutines-12     	100000000	        10.19 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/010_goroutines-12     	463437961	         2.231 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/010_goroutines-12     	544560752	         2.286 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/010_goroutines-12     	506037217	         2.279 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/100_goroutines-12     	747261598	         1.440 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/100_goroutines-12     	770310522	         1.435 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/100_goroutines-12     	816488761	         1.461 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/:00_goroutines-12     	881420740	         1.392 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/:00_goroutines-12     	792185961	         1.362 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMultiGoroutine/:00_goroutines-12     	838436247	         1.372 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/kimuyb/bingsan/tests/benchmark	74.622s

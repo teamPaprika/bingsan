@@ -13,6 +13,7 @@ import (
 	"github.com/kimuyb/bingsan/internal/config"
 	"github.com/kimuyb/bingsan/internal/db"
 	"github.com/kimuyb/bingsan/internal/metrics"
+	"github.com/kimuyb/bingsan/internal/pool"
 )
 
 // TableIdentifier identifies a table by namespace and name.
@@ -244,10 +245,15 @@ func CreateTable(database *db.DB, cfg *config.Config) fiber.Handler {
 		metadataLocation := fmt.Sprintf("%s/metadata/00000-%.10d-%s.metadata.json",
 			location, now, tableUUID[:8])
 
-		metadataJSON, err := json.Marshal(metadata)
-		if err != nil {
+		// Use pooled buffer for JSON serialization
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
+
+		encoder := json.NewEncoder(buf)
+		if err := encoder.Encode(metadata); err != nil {
 			return internalError(c, "failed to marshal metadata", err)
 		}
+		metadataJSON := buf.Bytes()
 
 		// Insert table
 		_, err = database.Pool.Exec(c.Context(), `
@@ -389,10 +395,15 @@ func CommitTable(database *db.DB, cfg *config.Config) fiber.Handler {
 			tableUUID[:8],
 		)
 
-		metadataJSON, err := json.Marshal(metadata)
-		if err != nil {
+		// Use pooled buffer for JSON serialization
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
+
+		encoder := json.NewEncoder(buf)
+		if err := encoder.Encode(metadata); err != nil {
 			return internalError(c, "failed to marshal metadata", err)
 		}
+		metadataJSON := buf.Bytes()
 
 		// Update table
 		_, err = database.Pool.Exec(c.Context(), `
@@ -535,10 +546,15 @@ func RegisterTable(database *db.DB, cfg *config.Config) fiber.Handler {
 			"last-updated-ms": time.Now().UnixMilli(),
 		}
 
-		metadataJSON, err := json.Marshal(metadata)
-		if err != nil {
+		// Use pooled buffer for JSON serialization
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
+
+		encoder := json.NewEncoder(buf)
+		if err := encoder.Encode(metadata); err != nil {
 			return internalError(c, "failed to marshal metadata", err)
 		}
+		metadataJSON := buf.Bytes()
 
 		// Insert table
 		_, err = database.Pool.Exec(c.Context(), `

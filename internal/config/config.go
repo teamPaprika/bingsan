@@ -15,6 +15,13 @@ type Config struct {
 	Storage  StorageConfig  `mapstructure:"storage"`
 	Auth     AuthConfig     `mapstructure:"auth"`
 	Catalog  CatalogConfig  `mapstructure:"catalog"`
+	Pool     PoolConfig     `mapstructure:"pool"`
+}
+
+// PoolConfig holds object pool configuration for performance optimization.
+type PoolConfig struct {
+	BufferInitialSize int `mapstructure:"buffer_initial_size"` // Initial buffer size in bytes
+	BufferMaxSize     int `mapstructure:"buffer_max_size"`     // Max buffer size before discard
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -187,4 +194,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("catalog.lock_timeout", 30*time.Second)
 	v.SetDefault("catalog.lock_retry_interval", 100*time.Millisecond)
 	v.SetDefault("catalog.max_lock_retries", 100)
+
+	// Pool defaults (for sync.Pool optimization)
+	v.SetDefault("pool.buffer_initial_size", 4096)  // 4KB - typical JSON metadata size
+	v.SetDefault("pool.buffer_max_size", 65536)     // 64KB - discard oversized buffers
 }
