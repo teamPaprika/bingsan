@@ -1,0 +1,235 @@
+# Bingsan Iceberg REST Catalog - Integration Test Suite
+# Usage: docker compose -f test.yaml up --abort-on-container-exit
+#
+# Tests all API endpoints across phases:
+# - Phase 1: Namespace & Table CRUD
+# - Phase 2: Table Operations (Commit, Register, Rename, Metrics)
+# - Phase 3: Views CRUD
+# - Phase 4: Scan Planning
+# - Phase 5: Prometheus Metrics
+
+services:
+  test:
+    image: curlimages/curl:latest
+    container_name: bingsan-test
+    networks:
+      - iceberg-net
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+
+        CATALOG_URL="http://iceberg-catalog:8181"
+        PASSED=0
+        FAILED=0
+
+        # Helper functions
+        log() { echo "[TEST] $$1"; }
+        pass() { PASSED=$$((PASSED + 1)); echo "[PASS] $$1"; }
+        fail() { FAILED=$$((FAILED + 1)); echo "[FAIL] $$1"; }
+
+        check_status() {
+          local expected=$$1 actual=$$2 name=$$3
+          if [ "$$actual" = "$$expected" ]; then
+            pass "$$name (HTTP $$actual)"
+          else
+            fail "$$name - expected $$expected, got $$actual"
+          fi
+        }
+
+        # Wait for catalog to be ready
+        log "Waiting for catalog to be ready..."
+        for i in $$(seq 1 30); do
+          if curl -sf "$$CATALOG_URL/health/live" > /dev/null 2>&1; then
+            log "Catalog is ready!"
+            break
+          fi
+          sleep 1
+        done
+
+        echo ""
+        echo "=============================================="
+        echo "  Bingsan Iceberg REST Catalog Test Suite"
+        echo "=============================================="
+        echo ""
+
+        ###########################################
+        # PHASE 1: Namespace & Table CRUD
+        ###########################################
+        log "=== PHASE 1: Namespace & Table CRUD ==="
+
+        # Create namespace
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -X POST "$$CATALOG_URL/v1/namespaces" \
+          -H "Content-Type: application/json" \
+          -d '{"namespace": ["test_ns"]}')
+        check_status "200" "$$STATUS" "Create namespace"
+
+        # List namespaces
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "$$CATALOG_URL/v1/namespaces")
+        check_status "200" "$$STATUS" "List namespaces"
+
+        # Get namespace
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "$$CATALOG_URL/v1/namespaces/test_ns")
+        check_status "200" "$$STATUS" "Get namespace"
+
+        # Namespace exists (HEAD)
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -I "$$CATALOG_URL/v1/namespaces/test_ns")
+        check_status "204" "$$STATUS" "Namespace exists"
+
+        # Create table
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -X POST "$$CATALOG_URL/v1/namespaces/test_ns/tables" \
+          -H "Content-Type: application/json" \
+          -d '{"name": "test_table", "schema": {"type": "struct", "fields": [{"id": 1, "name": "id", "type": "long", "required": true}]}}')
+        check_status "200" "$$STATUS" "Create table"
+
+        # List tables
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "$$CATALOG_URL/v1/namespaces/test_ns/tables")
+        check_status "200" "$$STATUS" "List tables"
+
+        # Get table
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "$$CATALOG_URL/v1/namespaces/test_ns/tables/test_table")
+        check_status "200" "$$STATUS" "Get table"
+
+        # Table exists (HEAD)
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -I "$$CATALOG_URL/v1/namespaces/test_ns/tables/test_table")
+        check_status "204" "$$STATUS" "Table exists"
+
+        echo ""
+
+        ###########################################
+        # PHASE 2: Table Operations
+        ###########################################
+        log "=== PHASE 2: Table Operations ==="
+
+        # Get table UUID for commit
+        TABLE_META=$$(curl -s "$$CATALOG_URL/v1/namespaces/test_ns/tables/test_table")
+        TABLE_UUID=$$(echo "$$TABLE_META" | grep -o '"table-uuid":"[^"]*"' | cut -d'"' -f4)
+
+        # Commit table
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -X POST "$$CATALOG_URL/v1/namespaces/test_ns/tables/test_table" \
+          -H "Content-Type: application/json" \
+          -d "{\"identifier\": {\"namespace\": [\"test_ns\"], \"name\": \"test_table\"}, \"requirements\": [{\"type\": \"assert-table-uuid\", \"uuid\": \"$$TABLE_UUID\"}], \"updates\": []}")
+        check_status "200" "$$STATUS" "Commit table"
+
+        # Register table
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -X POST "$$CATALOG_URL/v1/namespaces/test_ns/register" \
+          -H "Content-Type: application/json" \
+          -d '{"name": "registered_table", "metadata-location": "s3://warehouse/registered.json"}')
+        check_status "200" "$$STATUS" "Register table"
+
+        # Report metrics
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -X POST "$$CATALOG_URL/v1/namespaces/test_ns/tables/test_table/metrics" \
+          -H "Content-Type: application/json" \
+          -d '{"table-uuid": "test-uuid", "timestamp": 1234567890, "metrics": {}}')
+        check_status "204" "$$STATUS" "Report metrics"
+
+        echo ""
+
+        ###########################################
+        # PHASE 3: Views CRUD
+        ###########################################
+        log "=== PHASE 3: Views CRUD ==="
+
+        # Create view
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -X POST "$$CATALOG_URL/v1/namespaces/test_ns/views" \
+          -H "Content-Type: application/json" \
+          -d '{"name": "test_view", "schema": {"type": "struct", "fields": [{"id": 1, "name": "col1", "type": "string", "required": false}]}, "view-version": {"version-id": 1, "schema-id": 0, "timestamp-ms": 1234567890, "summary": {"engine-name": "spark"}, "representations": [{"type": "sql", "sql": "SELECT * FROM test", "dialect": "spark"}]}}')
+        check_status "200" "$$STATUS" "Create view"
+
+        # List views
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "$$CATALOG_URL/v1/namespaces/test_ns/views")
+        check_status "200" "$$STATUS" "List views"
+
+        # Get view
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "$$CATALOG_URL/v1/namespaces/test_ns/views/test_view")
+        check_status "200" "$$STATUS" "Get view"
+
+        # View exists (HEAD)
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -I "$$CATALOG_URL/v1/namespaces/test_ns/views/test_view")
+        check_status "204" "$$STATUS" "View exists"
+
+        # Delete view
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$$CATALOG_URL/v1/namespaces/test_ns/views/test_view")
+        check_status "204" "$$STATUS" "Delete view"
+
+        echo ""
+
+        ###########################################
+        # PHASE 4: Scan Planning
+        ###########################################
+        log "=== PHASE 4: Scan Planning ==="
+
+        # Submit scan plan
+        PLAN_RESULT=$$(curl -s -w "\n%{http_code}" -X POST "$$CATALOG_URL/v1/namespaces/test_ns/tables/test_table/plan" \
+          -H "Content-Type: application/json" \
+          -d '{"select": ["id"], "case-sensitive": true}')
+        PLAN_BODY=$$(echo "$$PLAN_RESULT" | head -n -1)
+        STATUS=$$(echo "$$PLAN_RESULT" | tail -1)
+        check_status "202" "$$STATUS" "Submit scan plan"
+
+        PLAN_ID=$$(echo "$$PLAN_BODY" | grep -o '"plan-id":"[^"]*"' | cut -d'"' -f4)
+
+        # Get scan plan status
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "$$CATALOG_URL/v1/namespaces/test_ns/tables/test_table/plan/$$PLAN_ID")
+        check_status "200" "$$STATUS" "Get scan plan status"
+
+        # Fetch scan tasks
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" -X POST "$$CATALOG_URL/v1/namespaces/test_ns/tables/test_table/tasks" \
+          -H "Content-Type: application/json" \
+          -d "{\"plan-id\": \"$$PLAN_ID\"}")
+        check_status "200" "$$STATUS" "Fetch scan tasks"
+
+        echo ""
+
+        ###########################################
+        # PHASE 5: Prometheus Metrics
+        ###########################################
+        log "=== PHASE 5: Prometheus Metrics ==="
+
+        # Check metrics endpoint
+        STATUS=$$(curl -s -o /dev/null -w "%{http_code}" "$$CATALOG_URL/metrics")
+        check_status "200" "$$STATUS" "Prometheus /metrics endpoint"
+
+        # Check custom iceberg metrics exist
+        METRICS=$$(curl -s "$$CATALOG_URL/metrics")
+        if echo "$$METRICS" | grep -q "iceberg_"; then
+          pass "Custom iceberg_* metrics present"
+        else
+          fail "Custom iceberg_* metrics missing"
+        fi
+
+        echo ""
+
+        ###########################################
+        # CLEANUP
+        ###########################################
+        log "=== CLEANUP ==="
+
+        # Delete test table
+        curl -s -o /dev/null -X DELETE "$$CATALOG_URL/v1/namespaces/test_ns/tables/test_table?purgeRequested=true"
+        curl -s -o /dev/null -X DELETE "$$CATALOG_URL/v1/namespaces/test_ns/tables/registered_table?purgeRequested=true"
+
+        # Delete namespace
+        curl -s -o /dev/null -X DELETE "$$CATALOG_URL/v1/namespaces/test_ns"
+
+        log "Cleanup completed"
+
+        echo ""
+        echo "=============================================="
+        echo "  TEST SUMMARY"
+        echo "=============================================="
+        echo "  Passed: $$PASSED"
+        echo "  Failed: $$FAILED"
+        echo "=============================================="
+        echo ""
+
+        if [ $$FAILED -gt 0 ]; then
+          exit 1
+        fi
+
+        exit 0
+
+networks:
+  iceberg-net:
+    external: true
+    name: docker_iceberg-net

@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bingsan
+  labels:
+    app: bingsan
+    app.kubernetes.io/name: bingsan
+    app.kubernetes.io/component: catalog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bingsan
+  template:
+    metadata:
+      labels:
+        app: bingsan
+        app.kubernetes.io/name: bingsan
+        app.kubernetes.io/component: catalog
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8181"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: bingsan
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+      - name: bingsan
+        image: bingsan:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8181
+          protocol: TCP
+        env:
+        - name: ICEBERG_SERVER_HOST
+          value: "0.0.0.0"
+        - name: ICEBERG_SERVER_PORT
+          value: "8181"
+        - name: ICEBERG_DATABASE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: bingsan-config
+              key: database-host
+        - name: ICEBERG_DATABASE_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: bingsan-config
+              key: database-port
+        - name: ICEBERG_DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: bingsan-secrets
+              key: database-user
+              optional: true
+        - name: ICEBERG_DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: bingsan-secrets
+              key: database-password
+              optional: true
+        - name: ICEBERG_DATABASE_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: bingsan-config
+              key: database-name
+        - name: ICEBERG_DATABASE_SSL_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: bingsan-config
+              key: database-ssl-mode
+        - name: ICEBERG_STORAGE_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: bingsan-config
+              key: storage-type
+        - name: ICEBERG_STORAGE_WAREHOUSE
+          valueFrom:
+            configMapKeyRef:
+              name: bingsan-config
+              key: storage-warehouse
+        - name: ICEBERG_AUTH_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: bingsan-config
+              key: auth-enabled
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL

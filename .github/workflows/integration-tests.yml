@@ -1,0 +1,130 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pyiceberg-tests:
+    name: PyIceberg Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bingsan
+          POSTGRES_PASSWORD: bingsan
+          POSTGRES_DB: bingsan
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "mc ready local"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: tests/integration/requirements.txt
+
+      - name: Install Python dependencies
+        run: pip install -r tests/integration/requirements.txt
+
+      - name: Create MinIO bucket
+        run: |
+          pip install minio
+          python -c "
+          from minio import Minio
+          client = Minio('localhost:9000', access_key='minioadmin', secret_key='minioadmin', secure=False)
+          if not client.bucket_exists('warehouse'):
+              client.make_bucket('warehouse')
+          print('Bucket created')
+          "
+
+      - name: Build and start Bingsan
+        run: |
+          go build -o bingsan ./cmd/bingsan
+          ./bingsan &
+          sleep 5
+        env:
+          BINGSAN_SERVER_HOST: "0.0.0.0"
+          BINGSAN_SERVER_PORT: "8181"
+          BINGSAN_DATABASE_HOST: localhost
+          BINGSAN_DATABASE_PORT: "5432"
+          BINGSAN_DATABASE_USER: bingsan
+          BINGSAN_DATABASE_PASSWORD: bingsan
+          BINGSAN_DATABASE_NAME: bingsan
+          BINGSAN_STORAGE_TYPE: s3
+          BINGSAN_STORAGE_WAREHOUSE: s3://warehouse/
+          BINGSAN_STORAGE_S3_ENDPOINT: http://localhost:9000
+          BINGSAN_STORAGE_S3_ACCESS_KEY: minioadmin
+          BINGSAN_STORAGE_S3_SECRET_KEY: minioadmin
+          BINGSAN_STORAGE_S3_PATH_STYLE: "true"
+
+      - name: Run PyIceberg tests
+        run: pytest tests/integration/test_pyiceberg.py -v --tb=short
+        env:
+          ICEBERG_CATALOG_URI: http://localhost:8181
+          ICEBERG_S3_ENDPOINT: http://localhost:9000
+
+  docker-compose-tests:
+    name: Docker Compose Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker build -t bingsan:test -f deployments/docker/Dockerfile .
+
+      - name: Start test environment
+        run: |
+          docker compose -f deployments/docker/docker-compose-test.yml up -d
+          sleep 30
+
+      - name: Health check
+        run: |
+          curl -f http://localhost:8181/health || exit 1
+
+      - name: Stop test environment
+        if: always()
+        run: |
+          docker compose -f deployments/docker/docker-compose-test.yml down -v

@@ -1,0 +1,335 @@
+# Contract Test Cases
+# Test cases for validating Iceberg REST API compliance
+
+version: "1.0"
+suite: contract
+description: "Validate Bingsan against Apache Iceberg REST Catalog OpenAPI spec"
+
+config:
+  openapi_spec: "https://raw.githubusercontent.com/apache/iceberg/main/open-api/rest-catalog-open-api.yaml"
+  base_url: "http://localhost:8181"
+  timeout: "10s"
+
+# Test fixtures created before tests
+fixtures:
+  - name: test_namespace
+    type: namespace
+    value: ["contract_test"]
+    cleanup: true
+
+  - name: test_table
+    type: table
+    namespace: ["contract_test"]
+    name: "test_table"
+    schema:
+      fields:
+        - id: 1
+          name: "id"
+          type: "long"
+          required: true
+        - id: 2
+          name: "name"
+          type: "string"
+          required: false
+    cleanup: true
+
+tests:
+  # Configuration
+  - id: config-001
+    name: "Get catalog configuration"
+    method: GET
+    path: "/v1/config"
+    expected_status: 200
+    response_schema: "GetConfigResponse"
+
+  # Namespace Operations
+  - id: ns-001
+    name: "List namespaces"
+    method: GET
+    path: "/v1/namespaces"
+    expected_status: 200
+    response_schema: "ListNamespacesResponse"
+
+  - id: ns-002
+    name: "Create namespace"
+    method: POST
+    path: "/v1/namespaces"
+    request_body:
+      namespace: ["contract_test_create"]
+      properties:
+        owner: "test"
+    expected_status: 200
+    response_schema: "CreateNamespaceResponse"
+    cleanup:
+      - method: DELETE
+        path: "/v1/namespaces/contract_test_create"
+
+  - id: ns-003
+    name: "Get namespace"
+    method: GET
+    path: "/v1/namespaces/contract_test"
+    depends_on: [test_namespace]
+    expected_status: 200
+    response_schema: "GetNamespaceResponse"
+
+  - id: ns-004
+    name: "Check namespace exists"
+    method: HEAD
+    path: "/v1/namespaces/contract_test"
+    depends_on: [test_namespace]
+    expected_status: 204
+
+  - id: ns-005
+    name: "Update namespace properties"
+    method: POST
+    path: "/v1/namespaces/contract_test/properties"
+    depends_on: [test_namespace]
+    request_body:
+      updates:
+        updated_by: "test"
+      removals: []
+    expected_status: 200
+    response_schema: "UpdateNamespacePropertiesResponse"
+
+  - id: ns-006
+    name: "Get non-existent namespace returns 404"
+    method: GET
+    path: "/v1/namespaces/does_not_exist"
+    expected_status: 404
+    response_schema: "IcebergErrorResponse"
+
+  # Table Operations
+  - id: tbl-001
+    name: "List tables in namespace"
+    method: GET
+    path: "/v1/namespaces/contract_test/tables"
+    depends_on: [test_namespace]
+    expected_status: 200
+    response_schema: "ListTablesResponse"
+
+  - id: tbl-002
+    name: "Create table"
+    method: POST
+    path: "/v1/namespaces/contract_test/tables"
+    depends_on: [test_namespace]
+    request_body:
+      name: "contract_test_table"
+      schema:
+        schema-id: 0
+        type: "struct"
+        fields:
+          - id: 1
+            name: "id"
+            type: "long"
+            required: true
+    expected_status: 200
+    response_schema: "LoadTableResponse"
+    cleanup:
+      - method: DELETE
+        path: "/v1/namespaces/contract_test/tables/contract_test_table"
+
+  - id: tbl-003
+    name: "Load table metadata"
+    method: GET
+    path: "/v1/namespaces/contract_test/tables/test_table"
+    depends_on: [test_table]
+    expected_status: 200
+    response_schema: "LoadTableResponse"
+
+  - id: tbl-004
+    name: "Check table exists"
+    method: HEAD
+    path: "/v1/namespaces/contract_test/tables/test_table"
+    depends_on: [test_table]
+    expected_status: 204
+
+  - id: tbl-005
+    name: "Get non-existent table returns 404"
+    method: GET
+    path: "/v1/namespaces/contract_test/tables/does_not_exist"
+    depends_on: [test_namespace]
+    expected_status: 404
+    response_schema: "IcebergErrorResponse"
+
+  - id: tbl-006
+    name: "Rename table"
+    method: POST
+    path: "/v1/tables/rename"
+    depends_on: [test_namespace]
+    setup:
+      - method: POST
+        path: "/v1/namespaces/contract_test/tables"
+        body:
+          name: "rename_source"
+          schema:
+            schema-id: 0
+            type: "struct"
+            fields:
+              - id: 1
+                name: "id"
+                type: "long"
+                required: true
+    request_body:
+      source:
+        namespace: ["contract_test"]
+        name: "rename_source"
+      destination:
+        namespace: ["contract_test"]
+        name: "rename_dest"
+    expected_status: 200
+    cleanup:
+      - method: DELETE
+        path: "/v1/namespaces/contract_test/tables/rename_dest"
+
+  - id: tbl-007
+    name: "Register existing table"
+    method: POST
+    path: "/v1/namespaces/contract_test/register"
+    depends_on: [test_namespace]
+    request_body:
+      name: "registered_table"
+      metadata-location: "s3://warehouse/test/metadata.json"
+    expected_status: 200
+    response_schema: "LoadTableResponse"
+    skip_if: "no_storage"  # Skip if storage not configured
+
+  # View Operations
+  - id: view-001
+    name: "List views in namespace"
+    method: GET
+    path: "/v1/namespaces/contract_test/views"
+    depends_on: [test_namespace]
+    expected_status: 200
+    response_schema: "ListViewsResponse"
+
+  - id: view-002
+    name: "Create view"
+    method: POST
+    path: "/v1/namespaces/contract_test/views"
+    depends_on: [test_namespace]
+    request_body:
+      name: "contract_test_view"
+      schema:
+        schema-id: 0
+        type: "struct"
+        fields:
+          - id: 1
+            name: "id"
+            type: "long"
+            required: true
+      view-version:
+        version-id: 1
+        schema-id: 0
+        representations:
+          - type: "sql"
+            sql: "SELECT * FROM test_table"
+            dialect: "spark"
+    expected_status: 200
+    response_schema: "LoadViewResponse"
+    cleanup:
+      - method: DELETE
+        path: "/v1/namespaces/contract_test/views/contract_test_view"
+
+  - id: view-003
+    name: "Load view metadata"
+    method: GET
+    path: "/v1/namespaces/contract_test/views/contract_test_view"
+    depends_on: [view-002]
+    expected_status: 200
+    response_schema: "LoadViewResponse"
+
+  - id: view-004
+    name: "Check view exists"
+    method: HEAD
+    path: "/v1/namespaces/contract_test/views/contract_test_view"
+    depends_on: [view-002]
+    expected_status: 204
+
+  # Scan Planning
+  - id: scan-001
+    name: "Submit scan plan"
+    method: POST
+    path: "/v1/namespaces/contract_test/tables/test_table/plan"
+    depends_on: [test_table]
+    request_body:
+      snapshot-id: null
+      select: ["id", "name"]
+    expected_status: 200
+    response_schema: "PlanTableScanResponse"
+
+  - id: scan-002
+    name: "Get scan plan status"
+    method: GET
+    path: "/v1/namespaces/contract_test/tables/test_table/plan/{plan-id}"
+    depends_on: [scan-001]
+    expected_status: 200
+    response_schema: "GetPlanStatusResponse"
+    skip_if: "no_plan_id"
+
+  - id: scan-003
+    name: "Fetch scan tasks"
+    method: POST
+    path: "/v1/namespaces/contract_test/tables/test_table/tasks"
+    depends_on: [test_table]
+    request_body:
+      plan-id: "{plan-id}"
+    expected_status: 200
+    response_schema: "FetchTasksResponse"
+    skip_if: "no_plan_id"
+
+  # Multi-table Transactions
+  - id: txn-001
+    name: "Commit multi-table transaction"
+    method: POST
+    path: "/v1/transactions/commit"
+    depends_on: [test_table]
+    request_body:
+      table-changes: []
+    expected_status: 200
+    response_schema: "CommitTransactionResponse"
+
+  # Health and Monitoring
+  - id: health-001
+    name: "Liveness check"
+    method: GET
+    path: "/health"
+    expected_status: 200
+
+  - id: health-002
+    name: "Readiness check"
+    method: GET
+    path: "/ready"
+    expected_status: 200
+
+  - id: metrics-001
+    name: "Prometheus metrics"
+    method: GET
+    path: "/metrics"
+    expected_status: 200
+    response_content_type: "text/plain"
+
+  # Error Cases
+  - id: err-001
+    name: "Invalid JSON returns 400"
+    method: POST
+    path: "/v1/namespaces"
+    request_body_raw: "invalid json"
+    expected_status: 400
+    response_schema: "IcebergErrorResponse"
+
+  - id: err-002
+    name: "Missing required field returns 400"
+    method: POST
+    path: "/v1/namespaces"
+    request_body:
+      properties: {}
+    expected_status: 400
+    response_schema: "IcebergErrorResponse"
+
+  - id: err-003
+    name: "Delete non-empty namespace returns 409"
+    method: DELETE
+    path: "/v1/namespaces/contract_test"
+    depends_on: [test_table]
+    expected_status: 409
+    response_schema: "IcebergErrorResponse"

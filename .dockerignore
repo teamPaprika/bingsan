@@ -1,0 +1,61 @@
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+bin/
+vendor/
+*.test
+*.out
+coverage.html
+*.prof
+*.pprof
+
+# Environment and config
+.env*
+config.yaml
+config.local.yaml
+secrets.yaml
+*.pem
+*.key
+*.crt
+
+# Documentation
+docs/
+specs/
+*.md
+!README.md
+
+# Tests
+tests/
+coverage/
+
+# Development
+.air.toml
+tmp/
+temp/
+logs/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker/
+
+# Kubernetes
+deployments/kubernetes/
+
+# Data
+data/
+warehouse/
+*.db
+*.sqlite

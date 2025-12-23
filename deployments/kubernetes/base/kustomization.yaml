@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: bingsan
+
+namespace: default
+
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/managed-by: kustomize
+
+resources:
+- serviceaccount.yaml
+- configmap.yaml
+- deployment.yaml
+- service.yaml
+
+commonLabels:
+  app.kubernetes.io/name: bingsan
+  app.kubernetes.io/instance: bingsan
+  app.kubernetes.io/version: "0.1.0"
