@@ -1,0 +1,40 @@
+baseURL = 'https://bingsan.dev/'
+languageCode = 'en-us'
+title = 'Bingsan Documentation'
+theme = 'hugo-book'
+
+# Book configuration
+disablePathToLower = true
+enableGitInfo = false
+
+# Needed for menu
+[menu]
+[[menu.after]]
+  name = "GitHub"
+  url = "https://github.com/kimuyb/bingsan"
+  weight = 10
+
+[params]
+  # (Optional, default light) Sets color theme: light, dark or auto.
+  BookTheme = 'auto'
+  # (Optional, default true) Controls table of contents visibility on right side of pages.
+  BookToC = true
+  # (Optional, default docs) Specify root page to render child pages as menu.
+  BookSection = 'docs'
+  # Set source repository location.
+  BookRepo = 'https://github.com/kimuyb/bingsan'
+  # Enable "Edit this page" links for 'doc' page type.
+  BookEditPath = 'edit/main/docs-site/content'
+  # Breadcrumbs
+  BookBreadcrumb = true
+
+[markup]
+  [markup.highlight]
+    noClasses = false
+    style = 'monokai'
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+# Multi-lingual mode config
+defaultContentLanguage = 'en'
