@@ -61,6 +61,7 @@ jobs:
           version: v1.64.8
           install-mode: goinstall
           args: --timeout=5m
+          only-new-issues: true
 
   build:
     name: Build
