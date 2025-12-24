@@ -5,7 +5,7 @@ bin/
 *.dll
 *.so
 *.dylib
-iceberg-catalog
+/iceberg-catalog
 
 # Test binary, built with `go test -c`
 *.test
