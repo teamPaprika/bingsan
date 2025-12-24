@@ -13,6 +13,13 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("fatal error", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// Initialize logger
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -22,8 +29,7 @@ func main() {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
+		return err
 	}
 
 	// Set log level from config
@@ -41,15 +47,13 @@ func main() {
 	// Initialize database connection
 	database, err := db.New(cfg.Database)
 	if err != nil {
-		slog.Error("failed to connect to database", "error", err)
-		os.Exit(1)
+		return err
 	}
 	defer database.Close()
 
 	// Run migrations
 	if err := database.Migrate(); err != nil {
-		slog.Error("failed to run migrations", "error", err)
-		os.Exit(1)
+		return err
 	}
 
 	// Initialize and start HTTP server
@@ -74,4 +78,5 @@ func main() {
 	}
 
 	slog.Info("server stopped")
+	return nil
 }
