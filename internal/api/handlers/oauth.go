@@ -9,6 +9,7 @@ import (
 
 	"github.com/kimuyb/bingsan/internal/config"
 	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/kimuyb/bingsan/internal/pool"
 )
 
 // TokenRequest represents an OAuth2 token exchange request.
@@ -133,8 +134,20 @@ func ExchangeToken(cfg *config.Config, database *db.DB) fiber.Handler {
 	}
 }
 
-// generateToken generates a random hex token.
+// generateToken generates a random hex token using pooled byte slices.
 func generateToken(length int) (string, error) {
+	// Use pooled byte slice for token generation if size matches
+	if length == pool.TokenSize {
+		slice := pool.GetBytes()
+		defer pool.PutBytes(slice)
+
+		if _, err := rand.Read(slice); err != nil {
+			return "", err
+		}
+		return hex.EncodeToString(slice), nil
+	}
+
+	// Fall back to allocation for non-standard sizes
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err

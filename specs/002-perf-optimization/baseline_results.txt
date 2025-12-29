@@ -1,0 +1,21 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kimuyb/bingsan/tests/benchmark
+cpu: Apple M3 Pro
+BenchmarkBaselineTableMetadataSerialization-12      	  107196	     10676 ns/op	    9236 B/op	     232 allocs/op
+BenchmarkBaselineTableMetadataSerialization-12      	  112818	     10714 ns/op	    9237 B/op	     232 allocs/op
+BenchmarkBaselineTableMetadataSerialization-12      	  111423	     10724 ns/op	    9237 B/op	     232 allocs/op
+BenchmarkBaselineTableMetadataLargeSchema-12        	   23822	     50212 ns/op	   43624 B/op	    1106 allocs/op
+BenchmarkBaselineTableMetadataLargeSchema-12        	   23754	     50423 ns/op	   43624 B/op	    1106 allocs/op
+BenchmarkBaselineTableMetadataLargeSchema-12        	   23752	     50598 ns/op	   43624 B/op	    1106 allocs/op
+BenchmarkBaselineTokenGeneration-12                 	 4817797	       251.0 ns/op	     128 B/op	       2 allocs/op
+BenchmarkBaselineTokenGeneration-12                 	 4808392	       250.4 ns/op	     128 B/op	       2 allocs/op
+BenchmarkBaselineTokenGeneration-12                 	 4751299	       250.6 ns/op	     128 B/op	       2 allocs/op
+BenchmarkBaselineGCPressureSerialization-12         	  119019	     10096 ns/op	         2.579 gc/1000ops	         8.174 gc_pause_ms_total	       307.0 gc_runs_total	    8884 B/op	     220 allocs/op
+BenchmarkBaselineGCPressureSerialization-12         	  118890	     10132 ns/op	         2.582 gc/1000ops	         8.092 gc_pause_ms_total	       307.0 gc_runs_total	    8884 B/op	     220 allocs/op
+BenchmarkBaselineGCPressureSerialization-12         	  118794	     10149 ns/op	         2.576 gc/1000ops	         8.090 gc_pause_ms_total	       306.0 gc_runs_total	    8884 B/op	     220 allocs/op
+BenchmarkBaselineMemoryStabilitySerialization-12    	  118426	     10158 ns/op	     -7600 heap_growth_bytes	   1605632 heap_inuse_bytes	    8884 B/op	     220 allocs/op
+BenchmarkBaselineMemoryStabilitySerialization-12    	  118440	     10158 ns/op	      4720 heap_growth_bytes	   1605632 heap_inuse_bytes	    8884 B/op	     220 allocs/op
+BenchmarkBaselineMemoryStabilitySerialization-12    	  116359	     10157 ns/op	     -7408 heap_growth_bytes	   1605632 heap_inuse_bytes	    8884 B/op	     220 allocs/op
+PASS
+ok  	github.com/kimuyb/bingsan/tests/benchmark	21.768s

@@ -12,6 +12,7 @@ import (
 
 	"github.com/kimuyb/bingsan/internal/config"
 	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/kimuyb/bingsan/internal/pool"
 )
 
 // ViewIdentifier identifies a view by namespace and name.
@@ -185,10 +186,15 @@ func CreateView(database *db.DB, cfg *config.Config) fiber.Handler {
 		metadataLocation := fmt.Sprintf("%s/metadata/00000-%.10d-%s.metadata.json",
 			location, now, viewUUID[:8])
 
-		metadataJSON, err := json.Marshal(metadata)
-		if err != nil {
+		// Use pooled buffer for JSON serialization
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
+
+		encoder := json.NewEncoder(buf)
+		if err := encoder.Encode(metadata); err != nil {
 			return internalError(c, "failed to marshal metadata", err)
 		}
+		metadataJSON := buf.Bytes()
 
 		// Insert view
 		_, err = database.Pool.Exec(c.Context(), `
@@ -313,10 +319,15 @@ func ReplaceView(database *db.DB, cfg *config.Config) fiber.Handler {
 			viewUUID[:8],
 		)
 
-		metadataJSON, err := json.Marshal(metadata)
-		if err != nil {
+		// Use pooled buffer for JSON serialization
+		buf := pool.GetBuffer()
+		defer pool.PutBuffer(buf)
+
+		encoder := json.NewEncoder(buf)
+		if err := encoder.Encode(metadata); err != nil {
 			return internalError(c, "failed to marshal metadata", err)
 		}
+		metadataJSON := buf.Bytes()
 
 		// Update view
 		_, err = database.Pool.Exec(c.Context(), `

@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -14,7 +15,7 @@ func BenchmarkListNamespaces(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/v1/namespaces", nil)
+		req := httptest.NewRequest("GET", "/v1/namespaces", http.NoBody)
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
@@ -32,7 +33,7 @@ func BenchmarkListNamespacesParallel(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			req := httptest.NewRequest("GET", "/v1/namespaces", nil)
+			req := httptest.NewRequest("GET", "/v1/namespaces", http.NoBody)
 			req.Header.Set("Content-Type", "application/json")
 			resp, err := server.App().Test(req, -1)
 			if err != nil {
@@ -53,7 +54,7 @@ func BenchmarkGetNamespaceMetadata(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/v1/namespaces/bench_test", nil)
+		req := httptest.NewRequest("GET", "/v1/namespaces/bench_test", http.NoBody)
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
@@ -70,7 +71,7 @@ func BenchmarkNamespaceExists(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("HEAD", "/v1/namespaces/bench_test", nil)
+		req := httptest.NewRequest("HEAD", "/v1/namespaces/bench_test", http.NoBody)
 		resp, err := server.App().Test(req, -1)
 		if err != nil {
 			b.Fatal(err)
