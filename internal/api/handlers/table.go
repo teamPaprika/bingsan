@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -330,6 +331,13 @@ func LoadTable(database *db.DB) fiber.Handler {
 // CommitTable commits updates to a table.
 // POST /v1/{prefix}/namespaces/{namespace}/tables/{table}
 func CommitTable(database *db.DB, cfg *config.Config) fiber.Handler {
+	// Build lock config from catalog settings
+	lockCfg := db.LockConfig{
+		Timeout:       cfg.Catalog.LockTimeout,
+		RetryInterval: cfg.Catalog.LockRetryInterval,
+		MaxRetries:    cfg.Catalog.MaxLockRetries,
+	}
+
 	return func(c *fiber.Ctx) error {
 		namespaceName := parseNamespace(c.Params("namespace"))
 		tableName := c.Params("table")
@@ -339,38 +347,131 @@ func CommitTable(database *db.DB, cfg *config.Config) fiber.Handler {
 			return badRequest(c, "invalid request body")
 		}
 
-		// Single query with JOIN - eliminates N+1
-		var tableID string
-		var metadataLocation string
-		var metadata map[string]any
-		err := database.Pool.QueryRow(c.Context(), `
-			SELECT t.id, t.metadata_location, t.metadata FROM tables t
-			JOIN namespaces n ON t.namespace_id = n.id
-			WHERE n.name = $1 AND t.name = $2
-			FOR UPDATE OF t
-		`, namespaceName, tableName).Scan(&tableID, &metadataLocation, &metadata)
+		// Result variables to capture from transaction
+		var response LoadTableResponse
+		var commitErr error
 
-		if err == pgx.ErrNoRows {
-			// Check if namespace exists to return appropriate error
-			var nsExists bool
-			_ = database.Pool.QueryRow(c.Context(), `
-				SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
-			`, namespaceName).Scan(&nsExists)
-			if !nsExists {
-				return namespaceNotFound(c, namespaceName)
+		// Execute within locked transaction with retry logic
+		err := database.WithLock(c.Context(), lockCfg, func(tx pgx.Tx) error {
+			// Get table with row lock
+			var tableID string
+			var metadataLocation string
+			var metadata map[string]any
+			err := tx.QueryRow(c.Context(), `
+				SELECT t.id, t.metadata_location, t.metadata FROM tables t
+				JOIN namespaces n ON t.namespace_id = n.id
+				WHERE n.name = $1 AND t.name = $2
+				FOR UPDATE OF t
+			`, namespaceName, tableName).Scan(&tableID, &metadataLocation, &metadata)
+
+			if err == pgx.ErrNoRows {
+				// Check if namespace exists to return appropriate error
+				var nsExists bool
+				_ = tx.QueryRow(c.Context(), `
+					SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
+				`, namespaceName).Scan(&nsExists)
+				if !nsExists {
+					commitErr = fmt.Errorf("namespace_not_found")
+					return nil // Don't retry on not found
+				}
+				commitErr = fmt.Errorf("table_not_found")
+				return nil // Don't retry on not found
 			}
-			return tableNotFound(c, namespaceName, tableName)
-		}
-		if err != nil {
-			return internalError(c, "failed to get table", err)
-		}
+			if err != nil {
+				return fmt.Errorf("failed to get table: %w", err)
+			}
 
-		// Validate requirements
-		for _, req := range req.Requirements {
-			if !validateRequirement(metadata, req) {
+			// Validate requirements
+			for _, r := range req.Requirements {
+				if !validateRequirement(metadata, r) {
+					commitErr = fmt.Errorf("requirement_failed:%s", r.Type)
+					return nil // Don't retry on requirement failure
+				}
+			}
+
+			// Apply updates
+			now := time.Now().UnixMilli()
+			metadata["last-updated-ms"] = now
+
+			// Generate new metadata location
+			tableUUID, ok := getStringFromMap(metadata, "table-uuid")
+			if !ok {
+				return fmt.Errorf("invalid metadata: missing table-uuid")
+			}
+			location, ok := getStringFromMap(metadata, "location")
+			if !ok {
+				return fmt.Errorf("invalid metadata: missing location")
+			}
+			newMetadataLocation := fmt.Sprintf("%s/metadata/%05d-%.10d-%s.metadata.json",
+				location,
+				getMetadataVersion(metadataLocation)+1,
+				now,
+				tableUUID[:8],
+			)
+
+			// Use pooled buffer for JSON serialization
+			buf := pool.GetBuffer()
+			defer pool.PutBuffer(buf)
+
+			encoder := json.NewEncoder(buf)
+			if err := encoder.Encode(metadata); err != nil {
+				return fmt.Errorf("failed to marshal metadata: %w", err)
+			}
+			metadataJSON := buf.Bytes()
+
+			// Update table
+			_, err = tx.Exec(c.Context(), `
+				UPDATE tables
+				SET metadata_location = $1, metadata = $2, previous_metadata_location = $3
+				WHERE id = $4
+			`, newMetadataLocation, metadataJSON, metadataLocation, tableID)
+			if err != nil {
+				return fmt.Errorf("failed to update table: %w", err)
+			}
+
+			// Log the commit
+			_, _ = tx.Exec(c.Context(), `
+				INSERT INTO commit_log (table_id, metadata_location)
+				VALUES ($1, $2)
+			`, tableID, newMetadataLocation)
+
+			// Set response
+			response = LoadTableResponse{
+				MetadataLocation: newMetadataLocation,
+				Metadata:         metadata,
+			}
+
+			return nil
+		})
+
+		// Handle errors
+		if err != nil {
+			if errors.Is(err, db.ErrLockTimeout) {
 				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 					"error": fiber.Map{
-						"message": fmt.Sprintf("Requirement failed: %s", req.Type),
+						"message": "Failed to acquire lock: concurrent modification in progress",
+						"type":    "CommitFailedException",
+						"code":    409,
+					},
+				})
+			}
+			return internalError(c, "failed to commit table", err)
+		}
+
+		// Handle business logic errors (not retryable)
+		if commitErr != nil {
+			errStr := commitErr.Error()
+			if errStr == "namespace_not_found" {
+				return namespaceNotFound(c, namespaceName)
+			}
+			if errStr == "table_not_found" {
+				return tableNotFound(c, namespaceName, tableName)
+			}
+			if strings.HasPrefix(errStr, "requirement_failed:") {
+				reqType := strings.TrimPrefix(errStr, "requirement_failed:")
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+					"error": fiber.Map{
+						"message": fmt.Sprintf("Requirement failed: %s", reqType),
 						"type":    "CommitFailedException",
 						"code":    409,
 					},
@@ -378,60 +479,10 @@ func CommitTable(database *db.DB, cfg *config.Config) fiber.Handler {
 			}
 		}
 
-		// Apply updates (simplified - full implementation would handle all update types)
-		now := time.Now().UnixMilli()
-		metadata["last-updated-ms"] = now
-
-		// Generate new metadata location with safe type assertions
-		tableUUID, ok := getStringFromMap(metadata, "table-uuid")
-		if !ok {
-			return internalError(c, "invalid metadata: missing table-uuid", nil)
-		}
-		location, ok := getStringFromMap(metadata, "location")
-		if !ok {
-			return internalError(c, "invalid metadata: missing location", nil)
-		}
-		newMetadataLocation := fmt.Sprintf("%s/metadata/%05d-%.10d-%s.metadata.json",
-			location,
-			getMetadataVersion(metadataLocation)+1,
-			now,
-			tableUUID[:8],
-		)
-
-		// Use pooled buffer for JSON serialization
-		buf := pool.GetBuffer()
-		defer pool.PutBuffer(buf)
-
-		encoder := json.NewEncoder(buf)
-		if err := encoder.Encode(metadata); err != nil {
-			return internalError(c, "failed to marshal metadata", err)
-		}
-		metadataJSON := buf.Bytes()
-
-		// Update table
-		_, err = database.Pool.Exec(c.Context(), `
-			UPDATE tables
-			SET metadata_location = $1, metadata = $2, previous_metadata_location = $3
-			WHERE id = $4
-		`, newMetadataLocation, metadataJSON, metadataLocation, tableID)
-
-		if err != nil {
-			return internalError(c, "failed to update table", err)
-		}
-
-		// Log the commit
-		_, _ = database.Pool.Exec(c.Context(), `
-			INSERT INTO commit_log (table_id, metadata_location)
-			VALUES ($1, $2)
-		`, tableID, newMetadataLocation)
-
 		// Record metrics
 		metrics.RecordTableCommit(strings.Join(namespaceName, "."), tableName)
 
-		return c.JSON(LoadTableResponse{
-			MetadataLocation: newMetadataLocation,
-			Metadata:         metadata,
-		})
+		return c.JSON(response)
 	}
 }
 

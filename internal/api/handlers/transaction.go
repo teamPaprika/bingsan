@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -40,6 +41,13 @@ type CommitResult struct {
 // CommitTransaction commits atomic multi-table updates.
 // POST /v1/{prefix}/transactions/commit
 func CommitTransaction(database *db.DB, cfg *config.Config) fiber.Handler {
+	// Build lock config from catalog settings
+	lockCfg := db.LockConfig{
+		Timeout:       cfg.Catalog.LockTimeout,
+		RetryInterval: cfg.Catalog.LockRetryInterval,
+		MaxRetries:    cfg.Catalog.MaxLockRetries,
+	}
+
 	return func(c *fiber.Ctx) error {
 		var req CommitTransactionRequest
 		if err := c.BodyParser(&req); err != nil {
@@ -50,11 +58,45 @@ func CommitTransaction(database *db.DB, cfg *config.Config) fiber.Handler {
 			return badRequest(c, "at least one table change is required")
 		}
 
-		// Execute transaction
-		results, err := executeTransaction(c.Context(), database, cfg, req.TableChanges)
+		// Result variables to capture from transaction
+		var results []CommitResult
+		var txErr error
+
+		// Execute within locked transaction with retry logic
+		err := database.WithLock(c.Context(), lockCfg, func(tx pgx.Tx) error {
+			results = make([]CommitResult, len(req.TableChanges))
+
+			for i, change := range req.TableChanges {
+				result, err := commitTableInTx(c.Context(), tx, cfg, change)
+				if err != nil {
+					// Check if it's a business logic error (not retryable)
+					var fiberErr *fiber.Error
+					if errors.As(err, &fiberErr) {
+						txErr = err
+						return nil // Don't retry on business errors
+					}
+					return err // Retry on lock/system errors
+				}
+				results[i] = *result
+			}
+
+			return nil
+		})
+
+		// Handle errors
 		if err != nil {
 			metrics.RecordTransactionCommit("failed")
-			return err
+			if errors.Is(err, db.ErrLockTimeout) {
+				return fiber.NewError(fiber.StatusConflict,
+					"Failed to acquire lock: concurrent modification in progress")
+			}
+			return fiber.NewError(fiber.StatusInternalServerError, "failed to commit transaction: "+err.Error())
+		}
+
+		// Handle business logic errors (not retryable)
+		if txErr != nil {
+			metrics.RecordTransactionCommit("failed")
+			return txErr
 		}
 
 		// Record metrics
@@ -64,31 +106,6 @@ func CommitTransaction(database *db.DB, cfg *config.Config) fiber.Handler {
 			CommitResults: results,
 		})
 	}
-}
-
-// executeTransaction executes a multi-table transaction atomically.
-func executeTransaction(ctx context.Context, database *db.DB, cfg *config.Config, changes []TableChange) ([]CommitResult, error) {
-	tx, err := database.Pool.Begin(ctx)
-	if err != nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to begin transaction: "+err.Error())
-	}
-	defer tx.Rollback(ctx)
-
-	results := make([]CommitResult, len(changes))
-
-	for i, change := range changes {
-		result, err := commitTableInTx(ctx, tx, cfg, change)
-		if err != nil {
-			return nil, err
-		}
-		results[i] = *result
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to commit transaction: "+err.Error())
-	}
-
-	return results, nil
 }
 
 // commitTableInTx commits changes to a single table within a transaction.

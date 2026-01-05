@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -268,6 +269,13 @@ func LoadView(database *db.DB) fiber.Handler {
 // ReplaceView replaces/updates a view.
 // POST /v1/{prefix}/namespaces/{namespace}/views/{view}
 func ReplaceView(database *db.DB, cfg *config.Config) fiber.Handler {
+	// Build lock config from catalog settings
+	lockCfg := db.LockConfig{
+		Timeout:       cfg.Catalog.LockTimeout,
+		RetryInterval: cfg.Catalog.LockRetryInterval,
+		MaxRetries:    cfg.Catalog.MaxLockRetries,
+	}
+
 	return func(c *fiber.Ctx) error {
 		namespaceName := parseNamespace(c.Params("namespace"))
 		viewName := c.Params("view")
@@ -277,76 +285,112 @@ func ReplaceView(database *db.DB, cfg *config.Config) fiber.Handler {
 			return badRequest(c, "invalid request body")
 		}
 
-		// Single query with JOIN - eliminates N+1
-		var viewID string
-		var metadataLocation string
-		var metadata map[string]any
-		err := database.Pool.QueryRow(c.Context(), `
-			SELECT v.id, v.metadata_location, v.metadata FROM views v
-			JOIN namespaces n ON v.namespace_id = n.id
-			WHERE n.name = $1 AND v.name = $2
-			FOR UPDATE OF v
-		`, namespaceName, viewName).Scan(&viewID, &metadataLocation, &metadata)
+		// Result variables to capture from transaction
+		var response LoadViewResponse
+		var updateErr error
 
-		if err == pgx.ErrNoRows {
-			// Check if namespace exists to return appropriate error
-			var nsExists bool
-			_ = database.Pool.QueryRow(c.Context(), `
-				SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
-			`, namespaceName).Scan(&nsExists)
-			if !nsExists {
-				return namespaceNotFound(c, namespaceName)
+		// Execute within locked transaction with retry logic
+		err := database.WithLock(c.Context(), lockCfg, func(tx pgx.Tx) error {
+			// Get view with row lock
+			var viewID string
+			var metadataLocation string
+			var metadata map[string]any
+			err := tx.QueryRow(c.Context(), `
+				SELECT v.id, v.metadata_location, v.metadata FROM views v
+				JOIN namespaces n ON v.namespace_id = n.id
+				WHERE n.name = $1 AND v.name = $2
+				FOR UPDATE OF v
+			`, namespaceName, viewName).Scan(&viewID, &metadataLocation, &metadata)
+
+			if err == pgx.ErrNoRows {
+				// Check if namespace exists to return appropriate error
+				var nsExists bool
+				_ = tx.QueryRow(c.Context(), `
+					SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
+				`, namespaceName).Scan(&nsExists)
+				if !nsExists {
+					updateErr = fmt.Errorf("namespace_not_found")
+					return nil // Don't retry on not found
+				}
+				updateErr = fmt.Errorf("view_not_found")
+				return nil // Don't retry on not found
 			}
-			return viewNotFound(c, namespaceName, viewName)
-		}
+			if err != nil {
+				return fmt.Errorf("failed to get view: %w", err)
+			}
+
+			// Apply updates
+			now := time.Now().UnixMilli()
+			viewUUID, ok := getStringFromMap(metadata, "view-uuid")
+			if !ok {
+				return fmt.Errorf("invalid metadata: missing view-uuid")
+			}
+			location, ok := getStringFromMap(metadata, "location")
+			if !ok {
+				return fmt.Errorf("invalid metadata: missing location")
+			}
+			newMetadataLocation := fmt.Sprintf("%s/metadata/%05d-%.10d-%s.metadata.json",
+				location,
+				getMetadataVersion(metadataLocation)+1,
+				now,
+				viewUUID[:8],
+			)
+
+			// Use pooled buffer for JSON serialization
+			buf := pool.GetBuffer()
+			defer pool.PutBuffer(buf)
+
+			encoder := json.NewEncoder(buf)
+			if err := encoder.Encode(metadata); err != nil {
+				return fmt.Errorf("failed to marshal metadata: %w", err)
+			}
+			metadataJSON := buf.Bytes()
+
+			// Update view
+			_, err = tx.Exec(c.Context(), `
+				UPDATE views
+				SET metadata_location = $1, metadata = $2
+				WHERE id = $3
+			`, newMetadataLocation, metadataJSON, viewID)
+			if err != nil {
+				return fmt.Errorf("failed to update view: %w", err)
+			}
+
+			// Set response
+			response = LoadViewResponse{
+				MetadataLocation: newMetadataLocation,
+				Metadata:         metadata,
+			}
+
+			return nil
+		})
+
+		// Handle errors
 		if err != nil {
-			return internalError(c, "failed to get view", err)
-		}
-
-		// TODO: Apply updates properly
-		// For now, just update the metadata
-
-		now := time.Now().UnixMilli()
-		viewUUID, ok := getStringFromMap(metadata, "view-uuid")
-		if !ok {
-			return internalError(c, "invalid metadata: missing view-uuid", nil)
-		}
-		location, ok := getStringFromMap(metadata, "location")
-		if !ok {
-			return internalError(c, "invalid metadata: missing location", nil)
-		}
-		newMetadataLocation := fmt.Sprintf("%s/metadata/%05d-%.10d-%s.metadata.json",
-			location,
-			getMetadataVersion(metadataLocation)+1,
-			now,
-			viewUUID[:8],
-		)
-
-		// Use pooled buffer for JSON serialization
-		buf := pool.GetBuffer()
-		defer pool.PutBuffer(buf)
-
-		encoder := json.NewEncoder(buf)
-		if err := encoder.Encode(metadata); err != nil {
-			return internalError(c, "failed to marshal metadata", err)
-		}
-		metadataJSON := buf.Bytes()
-
-		// Update view
-		_, err = database.Pool.Exec(c.Context(), `
-			UPDATE views
-			SET metadata_location = $1, metadata = $2
-			WHERE id = $3
-		`, newMetadataLocation, metadataJSON, viewID)
-
-		if err != nil {
+			if errors.Is(err, db.ErrLockTimeout) {
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+					"error": fiber.Map{
+						"message": "Failed to acquire lock: concurrent modification in progress",
+						"type":    "CommitFailedException",
+						"code":    409,
+					},
+				})
+			}
 			return internalError(c, "failed to update view", err)
 		}
 
-		return c.JSON(LoadViewResponse{
-			MetadataLocation: newMetadataLocation,
-			Metadata:         metadata,
-		})
+		// Handle business logic errors (not retryable)
+		if updateErr != nil {
+			errStr := updateErr.Error()
+			if errStr == "namespace_not_found" {
+				return namespaceNotFound(c, namespaceName)
+			}
+			if errStr == "view_not_found" {
+				return viewNotFound(c, namespaceName, viewName)
+			}
+		}
+
+		return c.JSON(response)
 	}
 }
 
