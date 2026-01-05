@@ -1,4 +1,5 @@
-.PHONY: all build test lint clean run dev docker-build docker-up docker-down migrate help
+.PHONY: all build test lint clean run dev docker-build docker-up docker-down migrate help \
+	bench-setup bench-start bench-stop bench-run bench-report
 
 # Variables
 BINARY_NAME=iceberg-catalog
@@ -185,3 +186,31 @@ install-tools:
 	go install mvdan.cc/gofumpt@latest
 	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 	@echo "Tools installed!"
+
+# =============================================================================
+# Polaris Benchmarks (REST Catalog load testing)
+# =============================================================================
+
+## bench-setup: Set up Polaris benchmark framework (requires Java 17+)
+bench-setup:
+	@echo "Setting up Polaris benchmarks..."
+	@cd benchmarks && $(MAKE) setup
+
+## bench-start: Start bingsan for benchmark testing
+bench-start:
+	@echo "Starting bingsan benchmark stack..."
+	@cd benchmarks && $(MAKE) start-bingsan
+
+## bench-stop: Stop bingsan benchmark stack
+bench-stop:
+	@echo "Stopping bingsan benchmark stack..."
+	@cd benchmarks && $(MAKE) stop-bingsan
+
+## bench-run: Run standard benchmark suite
+bench-run:
+	@echo "Running benchmark suite..."
+	@cd benchmarks && $(MAKE) create-dataset && $(MAKE) read-benchmark
+
+## bench-report: Open benchmark results in browser
+bench-report:
+	@cd benchmarks && $(MAKE) report

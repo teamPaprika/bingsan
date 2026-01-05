@@ -1,0 +1,198 @@
+# Docker Compose for Bingsan vs Lakekeeper Benchmark Comparison
+# Both catalogs share MinIO for storage but use separate PostgreSQL databases
+
+services:
+  # Shared PostgreSQL instance with separate databases
+  postgres:
+    image: postgres:16-alpine
+    container_name: bench-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - bench-postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-dbs.sql:/docker-entrypoint-initdb.d/init-dbs.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bench-network
+
+  # Shared MinIO storage
+  minio:
+    image: minio/minio:latest
+    container_name: bench-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    volumes:
+      - bench-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bench-network
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: bench-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/warehouse --ignore-existing;
+      mc mb myminio/lakekeeper-warehouse --ignore-existing;
+      mc anonymous set public myminio/warehouse;
+      mc anonymous set public myminio/lakekeeper-warehouse;
+      exit 0;
+      "
+    networks:
+      - bench-network
+
+  # ===================
+  # BINGSAN CATALOG
+  # ===================
+  bingsan:
+    build:
+      context: ../
+      dockerfile: deployments/docker/Dockerfile
+    container_name: bench-bingsan
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "8181:8181"
+    environment:
+      ICEBERG_SERVER_HOST: 0.0.0.0
+      ICEBERG_SERVER_PORT: 8181
+      ICEBERG_SERVER_DEBUG: "false"
+      ICEBERG_DATABASE_HOST: postgres
+      ICEBERG_DATABASE_PORT: 5432
+      ICEBERG_DATABASE_USER: bingsan
+      ICEBERG_DATABASE_PASSWORD: bingsan
+      ICEBERG_DATABASE_DATABASE: bingsan_catalog
+      ICEBERG_DATABASE_SSL_MODE: disable
+      ICEBERG_DATABASE_MAX_OPEN_CONNS: 50
+      ICEBERG_DATABASE_MAX_IDLE_CONNS: 25
+      ICEBERG_STORAGE_TYPE: s3
+      ICEBERG_STORAGE_WAREHOUSE: s3://warehouse
+      ICEBERG_STORAGE_S3_ENDPOINT: http://minio:9000
+      ICEBERG_STORAGE_S3_REGION: us-east-1
+      ICEBERG_STORAGE_S3_ACCESS_KEY_ID: minioadmin
+      ICEBERG_STORAGE_S3_SECRET_ACCESS_KEY: minioadmin
+      ICEBERG_STORAGE_S3_USE_PATH_STYLE: "true"
+      ICEBERG_AUTH_ENABLED: "true"
+      ICEBERG_AUTH_TOKEN_EXPIRY: 1h
+      ICEBERG_AUTH_SIGNING_KEY: benchmark-signing-key-change-in-production
+      ICEBERG_AUTH_OAUTH2_ENABLED: "true"
+      ICEBERG_AUTH_OAUTH2_CLIENT_ID: benchmark-client
+      ICEBERG_AUTH_OAUTH2_CLIENT_SECRET: benchmark-secret
+      ICEBERG_COMPAT_POLARIS_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8181/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - bench-network
+
+  # ===================
+  # LAKEKEEPER CATALOG
+  # ===================
+  lakekeeper-migrate:
+    image: quay.io/lakekeeper/catalog:latest
+    container_name: bench-lakekeeper-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["migrate"]
+    environment:
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://lakekeeper:lakekeeper@postgres:5432/lakekeeper_catalog
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://lakekeeper:lakekeeper@postgres:5432/lakekeeper_catalog
+      RUST_LOG: info
+    networks:
+      - bench-network
+
+  lakekeeper:
+    image: quay.io/lakekeeper/catalog:latest
+    container_name: bench-lakekeeper
+    depends_on:
+      lakekeeper-migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "8182:8181"
+    command: ["serve"]
+    environment:
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://lakekeeper:lakekeeper@postgres:5432/lakekeeper_catalog
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://lakekeeper:lakekeeper@postgres:5432/lakekeeper_catalog
+      LAKEKEEPER__BASE_URI: http://localhost:8182
+      RUST_LOG: info,lakekeeper=debug
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8181/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - bench-network
+
+  lakekeeper-bootstrap:
+    image: curlimages/curl:latest
+    container_name: bench-lakekeeper-bootstrap
+    depends_on:
+      lakekeeper:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Bootstrapping Lakekeeper...';
+      curl -X POST http://lakekeeper:8181/management/v1/bootstrap \
+        -H 'Content-Type: application/json' \
+        -d '{\"accept-terms-of-use\": true}' || true;
+      echo 'Creating warehouse...';
+      curl -X POST http://lakekeeper:8181/management/v1/warehouse \
+        -H 'Content-Type: application/json' \
+        -d '{
+          \"warehouse-name\": \"benchmark\",
+          \"project-id\": \"00000000-0000-0000-0000-000000000000\",
+          \"storage-profile\": {
+            \"type\": \"s3\",
+            \"bucket\": \"lakekeeper-warehouse\",
+            \"endpoint\": \"http://minio:9000\",
+            \"region\": \"us-east-1\",
+            \"path-style-access\": true,
+            \"flavor\": \"minio\"
+          },
+          \"storage-credential\": {
+            \"type\": \"s3\",
+            \"credential-type\": \"access-key\",
+            \"aws-access-key-id\": \"minioadmin\",
+            \"aws-secret-access-key\": \"minioadmin\"
+          }
+        }' || true;
+      echo 'Bootstrap complete';
+      "
+    networks:
+      - bench-network
+
+volumes:
+  bench-postgres-data:
+  bench-minio-data:
+
+networks:
+  bench-network:
+    driver: bridge

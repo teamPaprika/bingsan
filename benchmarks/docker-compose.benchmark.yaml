@@ -1,0 +1,121 @@
+# Docker Compose for Bingsan Benchmark Testing
+# Extends the main docker-compose with OAuth2 enabled and benchmark-specific settings
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bingsan-bench-postgres
+    environment:
+      POSTGRES_USER: iceberg
+      POSTGRES_PASSWORD: iceberg
+      POSTGRES_DB: iceberg_catalog
+    ports:
+      - "5433:5432"
+    volumes:
+      - bench-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iceberg -d iceberg_catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bingsan-bench
+
+  minio:
+    image: minio/minio:latest
+    container_name: bingsan-bench-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    volumes:
+      - bench-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bingsan-bench
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: bingsan-bench-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/warehouse --ignore-existing;
+      mc anonymous set public myminio/warehouse;
+      exit 0;
+      "
+    networks:
+      - bingsan-bench
+
+  catalog:
+    build:
+      context: ../
+      dockerfile: deployments/docker/Dockerfile
+    container_name: bingsan-bench-catalog
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "8181:8181"
+    environment:
+      # Server configuration
+      ICEBERG_SERVER_HOST: 0.0.0.0
+      ICEBERG_SERVER_PORT: 8181
+      ICEBERG_SERVER_DEBUG: "false"
+
+      # Database configuration
+      ICEBERG_DATABASE_HOST: postgres
+      ICEBERG_DATABASE_PORT: 5432
+      ICEBERG_DATABASE_USER: iceberg
+      ICEBERG_DATABASE_PASSWORD: iceberg
+      ICEBERG_DATABASE_DATABASE: iceberg_catalog
+      ICEBERG_DATABASE_SSL_MODE: disable
+      ICEBERG_DATABASE_MAX_OPEN_CONNS: 50
+      ICEBERG_DATABASE_MAX_IDLE_CONNS: 25
+
+      # Storage configuration
+      ICEBERG_STORAGE_TYPE: s3
+      ICEBERG_STORAGE_WAREHOUSE: s3://warehouse
+      ICEBERG_STORAGE_S3_ENDPOINT: http://minio:9000
+      ICEBERG_STORAGE_S3_REGION: us-east-1
+      ICEBERG_STORAGE_S3_ACCESS_KEY_ID: minioadmin
+      ICEBERG_STORAGE_S3_SECRET_ACCESS_KEY: minioadmin
+      ICEBERG_STORAGE_S3_USE_PATH_STYLE: "true"
+
+      # OAuth2 authentication - ENABLED for benchmarks
+      ICEBERG_AUTH_ENABLED: "true"
+      ICEBERG_AUTH_TOKEN_EXPIRY: 1h
+      ICEBERG_AUTH_SIGNING_KEY: benchmark-signing-key-change-in-production
+      ICEBERG_AUTH_OAUTH2_ENABLED: "true"
+      ICEBERG_AUTH_OAUTH2_CLIENT_ID: benchmark-client
+      ICEBERG_AUTH_OAUTH2_CLIENT_SECRET: benchmark-secret
+
+      # Polaris compatibility - enables /api/catalog/v1/{catalog}/... paths
+      ICEBERG_COMPAT_POLARIS_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8181/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - bingsan-bench
+
+volumes:
+  bench-postgres-data:
+  bench-minio-data:
+
+networks:
+  bingsan-bench:
+    driver: bridge

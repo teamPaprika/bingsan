@@ -93,3 +93,6 @@ CLAUDE.md
 
 # Backup files
 *.bak
+
+# Benchmarks - polaris-tools is cloned during setup
+benchmarks/polaris-tools/
