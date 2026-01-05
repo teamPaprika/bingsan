@@ -1,6 +1,44 @@
 # Bingsan
 
+[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/teamPaprika/bingsan)](https://goreportcard.com/report/github.com/teamPaprika/bingsan)
+
+**High-performance Apache Iceberg REST Catalog in Go — 2-3x faster than alternatives**
+
 [한국어](#한국어) | [English](#english)
+
+---
+
+## Performance
+
+Bingsan significantly outperforms other REST Catalog implementations. Benchmark results using [Apache Polaris Tools](https://github.com/apache/polaris-tools) with 10 concurrent connections:
+
+| Operation | Bingsan (Go) | Lakekeeper (Rust) | Speedup |
+|-----------|--------------|-------------------|---------|
+| Health Check | 11,933 req/s | 4,253 req/s | **2.8x** |
+| GET Namespace | 6,991 req/s | 2,481 req/s | **2.8x** |
+| LIST Namespaces | 9,018 req/s | 3,073 req/s | **2.9x** |
+| CREATE Namespace | 457 req/s | 378 req/s | **1.2x** |
+
+<details>
+<summary>Run benchmarks yourself</summary>
+
+```bash
+# Setup benchmark framework
+make bench-setup
+
+# Start Bingsan with OAuth2
+make bench-start
+
+# Run benchmarks
+make bench-run
+
+# View results
+make bench-report
+```
+
+</details>
 
 ---
 
@@ -56,7 +94,7 @@
 
 ```bash
 # 저장소 클론
-git clone https://github.com/kimuyb/bingsan.git
+git clone https://github.com/teamPaprika/bingsan.git
 cd bingsan
 
 # 설정 파일 복사
@@ -228,7 +266,7 @@ Apache License 2.0
 
 ```bash
 # Clone the repository
-git clone https://github.com/kimuyb/bingsan.git
+git clone https://github.com/teamPaprika/bingsan.git
 cd bingsan
 
 # Copy configuration file
