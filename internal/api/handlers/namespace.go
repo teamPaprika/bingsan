@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"net/url"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -80,7 +81,8 @@ func ListNamespaces(database *db.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		namespaces := [][]string{}
+		// Preallocate slice with expected capacity
+		namespaces := make([][]string, 0, pageSize)
 		var lastName []string
 		count := 0
 		for rows.Next() {
@@ -340,12 +342,18 @@ func UpdateNamespaceProperties(database *db.DB) fiber.Handler {
 
 // parseNamespace converts URL-encoded namespace to parts.
 func parseNamespace(encoded string) []string {
-	// URL encoding uses %1F as separator, but Fiber decodes it
-	// Also handle dot-separated for simple cases
-	if strings.Contains(encoded, "\x1f") {
-		return strings.Split(encoded, "\x1f")
+	// URL-decode the namespace first (Fiber doesn't auto-decode path params)
+	decoded, err := url.PathUnescape(encoded)
+	if err != nil {
+		// Fallback to original if decode fails
+		decoded = encoded
 	}
-	return strings.Split(encoded, ".")
+	// URL encoding uses %1F as separator, which decodes to \x1f
+	// Also handle dot-separated for simple cases
+	if strings.Contains(decoded, "\x1f") {
+		return strings.Split(decoded, "\x1f")
+	}
+	return strings.Split(decoded, ".")
 }
 
 // namespaceNotFound returns a namespace not found error.

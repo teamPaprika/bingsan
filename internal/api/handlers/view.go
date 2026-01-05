@@ -62,31 +62,27 @@ func ListViews(database *db.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		namespaceName := parseNamespace(c.Params("namespace"))
 		pageToken := c.Query("pageToken")
-		pageSize := c.QueryInt("pageSize", 100)
+		pageSize := validatePageSize(c.QueryInt("pageSize", 100))
 
-		// Get namespace ID
-		var namespaceID string
-		err := database.Pool.QueryRow(c.Context(), `
-			SELECT id FROM namespaces WHERE name = $1
-		`, namespaceName).Scan(&namespaceID)
-
-		if err == pgx.ErrNoRows {
-			return namespaceNotFound(c, namespaceName)
-		}
-		if err != nil {
-			return internalError(c, "failed to get namespace", err)
-		}
-
-		// List views
-		query := `SELECT name FROM views WHERE namespace_id = $1 ORDER BY name`
-		args := []any{namespaceID}
+		// Single query with JOIN - eliminates N+1
+		var query string
+		var args []any
 
 		if pageToken != "" {
-			query = `SELECT name FROM views WHERE namespace_id = $1 AND name > $2 ORDER BY name`
-			args = append(args, pageToken)
+			query = `
+				SELECT v.name FROM views v
+				JOIN namespaces n ON v.namespace_id = n.id
+				WHERE n.name = $1 AND v.name > $2
+				ORDER BY v.name LIMIT $3`
+			args = []any{namespaceName, pageToken, pageSize + 1}
+		} else {
+			query = `
+				SELECT v.name FROM views v
+				JOIN namespaces n ON v.namespace_id = n.id
+				WHERE n.name = $1
+				ORDER BY v.name LIMIT $2`
+			args = []any{namespaceName, pageSize + 1}
 		}
-
-		query += fmt.Sprintf(" LIMIT %d", pageSize+1)
 
 		rows, err := database.Pool.Query(c.Context(), query, args...)
 		if err != nil {
@@ -94,7 +90,8 @@ func ListViews(database *db.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		identifiers := []ViewIdentifier{}
+		// Preallocate slice with expected capacity
+		identifiers := make([]ViewIdentifier, 0, pageSize)
 		count := 0
 		var lastName string
 
@@ -112,6 +109,20 @@ func ListViews(database *db.DB) fiber.Handler {
 			})
 			lastName = name
 			count++
+		}
+
+		// Check if namespace exists (empty result could mean no views OR no namespace)
+		if count == 0 {
+			var exists bool
+			err := database.Pool.QueryRow(c.Context(), `
+				SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
+			`, namespaceName).Scan(&exists)
+			if err != nil {
+				return internalError(c, "failed to check namespace", err)
+			}
+			if !exists {
+				return namespaceNotFound(c, namespaceName)
+			}
 		}
 
 		response := ListViewsResponse{
@@ -223,28 +234,24 @@ func LoadView(database *db.DB) fiber.Handler {
 		namespaceName := parseNamespace(c.Params("namespace"))
 		viewName := c.Params("view")
 
-		// Get namespace ID
-		var namespaceID string
-		err := database.Pool.QueryRow(c.Context(), `
-			SELECT id FROM namespaces WHERE name = $1
-		`, namespaceName).Scan(&namespaceID)
-
-		if err == pgx.ErrNoRows {
-			return namespaceNotFound(c, namespaceName)
-		}
-		if err != nil {
-			return internalError(c, "failed to get namespace", err)
-		}
-
-		// Get view
+		// Single query with JOIN - eliminates N+1
 		var metadataLocation string
 		var metadata map[string]any
-		err = database.Pool.QueryRow(c.Context(), `
-			SELECT metadata_location, metadata FROM views
-			WHERE namespace_id = $1 AND name = $2
-		`, namespaceID, viewName).Scan(&metadataLocation, &metadata)
+		err := database.Pool.QueryRow(c.Context(), `
+			SELECT v.metadata_location, v.metadata FROM views v
+			JOIN namespaces n ON v.namespace_id = n.id
+			WHERE n.name = $1 AND v.name = $2
+		`, namespaceName, viewName).Scan(&metadataLocation, &metadata)
 
 		if err == pgx.ErrNoRows {
+			// Check if namespace exists to return appropriate error
+			var nsExists bool
+			_ = database.Pool.QueryRow(c.Context(), `
+				SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
+			`, namespaceName).Scan(&nsExists)
+			if !nsExists {
+				return namespaceNotFound(c, namespaceName)
+			}
 			return viewNotFound(c, namespaceName, viewName)
 		}
 		if err != nil {
@@ -270,30 +277,26 @@ func ReplaceView(database *db.DB, cfg *config.Config) fiber.Handler {
 			return badRequest(c, "invalid request body")
 		}
 
-		// Get namespace ID
-		var namespaceID string
-		err := database.Pool.QueryRow(c.Context(), `
-			SELECT id FROM namespaces WHERE name = $1
-		`, namespaceName).Scan(&namespaceID)
-
-		if err == pgx.ErrNoRows {
-			return namespaceNotFound(c, namespaceName)
-		}
-		if err != nil {
-			return internalError(c, "failed to get namespace", err)
-		}
-
-		// Get current view state
+		// Single query with JOIN - eliminates N+1
 		var viewID string
 		var metadataLocation string
 		var metadata map[string]any
-		err = database.Pool.QueryRow(c.Context(), `
-			SELECT id, metadata_location, metadata FROM views
-			WHERE namespace_id = $1 AND name = $2
-			FOR UPDATE
-		`, namespaceID, viewName).Scan(&viewID, &metadataLocation, &metadata)
+		err := database.Pool.QueryRow(c.Context(), `
+			SELECT v.id, v.metadata_location, v.metadata FROM views v
+			JOIN namespaces n ON v.namespace_id = n.id
+			WHERE n.name = $1 AND v.name = $2
+			FOR UPDATE OF v
+		`, namespaceName, viewName).Scan(&viewID, &metadataLocation, &metadata)
 
 		if err == pgx.ErrNoRows {
+			// Check if namespace exists to return appropriate error
+			var nsExists bool
+			_ = database.Pool.QueryRow(c.Context(), `
+				SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
+			`, namespaceName).Scan(&nsExists)
+			if !nsExists {
+				return namespaceNotFound(c, namespaceName)
+			}
 			return viewNotFound(c, namespaceName, viewName)
 		}
 		if err != nil {
@@ -354,29 +357,26 @@ func DropView(database *db.DB) fiber.Handler {
 		namespaceName := parseNamespace(c.Params("namespace"))
 		viewName := c.Params("view")
 
-		// Get namespace ID
-		var namespaceID string
-		err := database.Pool.QueryRow(c.Context(), `
-			SELECT id FROM namespaces WHERE name = $1
-		`, namespaceName).Scan(&namespaceID)
-
-		if err == pgx.ErrNoRows {
-			return namespaceNotFound(c, namespaceName)
-		}
-		if err != nil {
-			return internalError(c, "failed to get namespace", err)
-		}
-
-		// Delete view
+		// Single DELETE with JOIN - eliminates N+1
 		result, err := database.Pool.Exec(c.Context(), `
-			DELETE FROM views WHERE namespace_id = $1 AND name = $2
-		`, namespaceID, viewName)
+			DELETE FROM views v
+			USING namespaces n
+			WHERE v.namespace_id = n.id AND n.name = $1 AND v.name = $2
+		`, namespaceName, viewName)
 
 		if err != nil {
 			return internalError(c, "failed to delete view", err)
 		}
 
 		if result.RowsAffected() == 0 {
+			// Check if namespace exists to return appropriate error
+			var nsExists bool
+			_ = database.Pool.QueryRow(c.Context(), `
+				SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
+			`, namespaceName).Scan(&nsExists)
+			if !nsExists {
+				return namespaceNotFound(c, namespaceName)
+			}
 			return viewNotFound(c, namespaceName, viewName)
 		}
 

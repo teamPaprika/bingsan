@@ -115,31 +115,27 @@ func ListTables(database *db.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		namespaceName := parseNamespace(c.Params("namespace"))
 		pageToken := c.Query("pageToken")
-		pageSize := c.QueryInt("pageSize", 100)
+		pageSize := validatePageSize(c.QueryInt("pageSize", 100))
 
-		// Get namespace ID
-		var namespaceID string
-		err := database.Pool.QueryRow(c.Context(), `
-			SELECT id FROM namespaces WHERE name = $1
-		`, namespaceName).Scan(&namespaceID)
-
-		if err == pgx.ErrNoRows {
-			return namespaceNotFound(c, namespaceName)
-		}
-		if err != nil {
-			return internalError(c, "failed to get namespace", err)
-		}
-
-		// List tables
-		query := `SELECT name FROM tables WHERE namespace_id = $1 ORDER BY name`
-		args := []any{namespaceID}
+		// Single query with JOIN - eliminates N+1
+		var query string
+		var args []any
 
 		if pageToken != "" {
-			query = `SELECT name FROM tables WHERE namespace_id = $1 AND name > $2 ORDER BY name`
-			args = append(args, pageToken)
+			query = `
+				SELECT t.name FROM tables t
+				JOIN namespaces n ON t.namespace_id = n.id
+				WHERE n.name = $1 AND t.name > $2
+				ORDER BY t.name LIMIT $3`
+			args = []any{namespaceName, pageToken, pageSize + 1}
+		} else {
+			query = `
+				SELECT t.name FROM tables t
+				JOIN namespaces n ON t.namespace_id = n.id
+				WHERE n.name = $1
+				ORDER BY t.name LIMIT $2`
+			args = []any{namespaceName, pageSize + 1}
 		}
-
-		query += fmt.Sprintf(" LIMIT %d", pageSize+1)
 
 		rows, err := database.Pool.Query(c.Context(), query, args...)
 		if err != nil {
@@ -147,7 +143,8 @@ func ListTables(database *db.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		identifiers := []TableIdentifier{}
+		// Preallocate slice with expected capacity
+		identifiers := make([]TableIdentifier, 0, pageSize)
 		count := 0
 		var lastName string
 
@@ -165,6 +162,20 @@ func ListTables(database *db.DB) fiber.Handler {
 			})
 			lastName = name
 			count++
+		}
+
+		// Check if namespace exists (empty result could mean no tables OR no namespace)
+		if count == 0 {
+			var exists bool
+			err := database.Pool.QueryRow(c.Context(), `
+				SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
+			`, namespaceName).Scan(&exists)
+			if err != nil {
+				return internalError(c, "failed to check namespace", err)
+			}
+			if !exists {
+				return namespaceNotFound(c, namespaceName)
+			}
 		}
 
 		response := ListTablesResponse{
@@ -285,28 +296,24 @@ func LoadTable(database *db.DB) fiber.Handler {
 		namespaceName := parseNamespace(c.Params("namespace"))
 		tableName := c.Params("table")
 
-		// Get namespace ID
-		var namespaceID string
-		err := database.Pool.QueryRow(c.Context(), `
-			SELECT id FROM namespaces WHERE name = $1
-		`, namespaceName).Scan(&namespaceID)
-
-		if err == pgx.ErrNoRows {
-			return namespaceNotFound(c, namespaceName)
-		}
-		if err != nil {
-			return internalError(c, "failed to get namespace", err)
-		}
-
-		// Get table
+		// Single query with JOIN - eliminates N+1
 		var metadataLocation string
 		var metadata map[string]any
-		err = database.Pool.QueryRow(c.Context(), `
-			SELECT metadata_location, metadata FROM tables
-			WHERE namespace_id = $1 AND name = $2
-		`, namespaceID, tableName).Scan(&metadataLocation, &metadata)
+		err := database.Pool.QueryRow(c.Context(), `
+			SELECT t.metadata_location, t.metadata FROM tables t
+			JOIN namespaces n ON t.namespace_id = n.id
+			WHERE n.name = $1 AND t.name = $2
+		`, namespaceName, tableName).Scan(&metadataLocation, &metadata)
 
 		if err == pgx.ErrNoRows {
+			// Check if namespace exists to return appropriate error
+			var nsExists bool
+			_ = database.Pool.QueryRow(c.Context(), `
+				SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
+			`, namespaceName).Scan(&nsExists)
+			if !nsExists {
+				return namespaceNotFound(c, namespaceName)
+			}
 			return tableNotFound(c, namespaceName, tableName)
 		}
 		if err != nil {
@@ -332,30 +339,26 @@ func CommitTable(database *db.DB, cfg *config.Config) fiber.Handler {
 			return badRequest(c, "invalid request body")
 		}
 
-		// Get namespace ID
-		var namespaceID string
-		err := database.Pool.QueryRow(c.Context(), `
-			SELECT id FROM namespaces WHERE name = $1
-		`, namespaceName).Scan(&namespaceID)
-
-		if err == pgx.ErrNoRows {
-			return namespaceNotFound(c, namespaceName)
-		}
-		if err != nil {
-			return internalError(c, "failed to get namespace", err)
-		}
-
-		// Get current table state
+		// Single query with JOIN - eliminates N+1
 		var tableID string
 		var metadataLocation string
 		var metadata map[string]any
-		err = database.Pool.QueryRow(c.Context(), `
-			SELECT id, metadata_location, metadata FROM tables
-			WHERE namespace_id = $1 AND name = $2
-			FOR UPDATE
-		`, namespaceID, tableName).Scan(&tableID, &metadataLocation, &metadata)
+		err := database.Pool.QueryRow(c.Context(), `
+			SELECT t.id, t.metadata_location, t.metadata FROM tables t
+			JOIN namespaces n ON t.namespace_id = n.id
+			WHERE n.name = $1 AND t.name = $2
+			FOR UPDATE OF t
+		`, namespaceName, tableName).Scan(&tableID, &metadataLocation, &metadata)
 
 		if err == pgx.ErrNoRows {
+			// Check if namespace exists to return appropriate error
+			var nsExists bool
+			_ = database.Pool.QueryRow(c.Context(), `
+				SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
+			`, namespaceName).Scan(&nsExists)
+			if !nsExists {
+				return namespaceNotFound(c, namespaceName)
+			}
 			return tableNotFound(c, namespaceName, tableName)
 		}
 		if err != nil {
@@ -440,29 +443,26 @@ func DropTable(database *db.DB) fiber.Handler {
 		tableName := c.Params("table")
 		purge := c.QueryBool("purgeRequested", false)
 
-		// Get namespace ID
-		var namespaceID string
-		err := database.Pool.QueryRow(c.Context(), `
-			SELECT id FROM namespaces WHERE name = $1
-		`, namespaceName).Scan(&namespaceID)
-
-		if err == pgx.ErrNoRows {
-			return namespaceNotFound(c, namespaceName)
-		}
-		if err != nil {
-			return internalError(c, "failed to get namespace", err)
-		}
-
-		// Delete table
+		// Single DELETE with JOIN - eliminates N+1
 		result, err := database.Pool.Exec(c.Context(), `
-			DELETE FROM tables WHERE namespace_id = $1 AND name = $2
-		`, namespaceID, tableName)
+			DELETE FROM tables t
+			USING namespaces n
+			WHERE t.namespace_id = n.id AND n.name = $1 AND t.name = $2
+		`, namespaceName, tableName)
 
 		if err != nil {
 			return internalError(c, "failed to delete table", err)
 		}
 
 		if result.RowsAffected() == 0 {
+			// Check if namespace exists to return appropriate error
+			var nsExists bool
+			_ = database.Pool.QueryRow(c.Context(), `
+				SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
+			`, namespaceName).Scan(&nsExists)
+			if !nsExists {
+				return namespaceNotFound(c, namespaceName)
+			}
 			return tableNotFound(c, namespaceName, tableName)
 		}
 
