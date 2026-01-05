@@ -3,12 +3,25 @@ name: Benchmarks
 on:
   push:
     branches: [main]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
   pull_request:
     branches: [main]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# Cancel in-progress runs for the same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   benchmarks:
@@ -18,6 +31,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for base branch comparison
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -32,47 +47,22 @@ jobs:
         run: |
           go test -bench=. -benchmem -benchtime=3s -run=^$ ./tests/benchmark/... | tee benchmark-results.txt
 
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-results
-          path: benchmark-results.txt
-
-  memory-profile:
-    name: Memory Profiling
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Download dependencies
-        run: go mod download
-
       - name: Run memory benchmarks with profiling
         run: |
           go test -bench=BenchmarkMemory -benchmem -memprofile=mem.prof -run=^$ ./tests/benchmark/...
-
-      - name: Analyze memory profile
-        run: |
           go tool pprof -text mem.prof | head -50 > memory-analysis.txt || true
 
-      - name: Upload memory profile
+      - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: memory-profile
+          name: benchmark-results
           path: |
+            benchmark-results.txt
             mem.prof
             memory-analysis.txt
 
   compare-benchmarks:
-    name: Compare Benchmarks (PR only)
+    name: Compare Benchmarks
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
 
