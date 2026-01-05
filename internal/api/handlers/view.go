@@ -302,9 +302,10 @@ func ReplaceView(database *db.DB, cfg *config.Config) fiber.Handler {
 				FOR UPDATE OF v
 			`, namespaceName, viewName).Scan(&viewID, &metadataLocation, &metadata)
 
-			if err == pgx.ErrNoRows {
+			if errors.Is(err, pgx.ErrNoRows) {
 				// Check if namespace exists to return appropriate error
 				var nsExists bool
+				//nolint:errcheck // Best effort check, default to view not found
 				_ = tx.QueryRow(c.Context(), `
 					SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
 				`, namespaceName).Scan(&nsExists)

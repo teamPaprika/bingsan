@@ -55,7 +55,10 @@ func (db *DB) WithLock(ctx context.Context, cfg LockConfig, fn func(tx pgx.Tx) e
 		return err
 	}
 
-	return fmt.Errorf("%w: %v", ErrLockTimeout, lastErr)
+	if lastErr != nil {
+		return fmt.Errorf("%w: %w", ErrLockTimeout, lastErr)
+	}
+	return ErrLockTimeout
 }
 
 // executeWithLock runs the function in a transaction with lock_timeout set.
@@ -65,7 +68,8 @@ func (db *DB) executeWithLock(ctx context.Context, timeout time.Duration, fn fun
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
 	defer func() {
-		_ = tx.Rollback(ctx)
+		// Ignore rollback error - transaction may already be committed
+		_ = tx.Rollback(ctx) //nolint:errcheck
 	}()
 
 	// Set lock_timeout for this transaction (in milliseconds)
@@ -87,8 +91,7 @@ func (db *DB) executeWithLock(ctx context.Context, timeout time.Duration, fn fun
 	return nil
 }
 
-// isLockTimeoutError checks if the error is a PostgreSQL lock timeout error.
-// PostgreSQL error code 55P03 = lock_not_available
+// isLockTimeoutError checks if the error is a PostgreSQL lock timeout error (code 55P03).
 func isLockTimeoutError(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
@@ -97,8 +100,7 @@ func isLockTimeoutError(err error) bool {
 	return false
 }
 
-// IsSerializationError checks if the error is a PostgreSQL serialization failure.
-// PostgreSQL error code 40001 = serialization_failure
+// IsSerializationError checks if the error is a PostgreSQL serialization failure (code 40001).
 func IsSerializationError(err error) bool {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {

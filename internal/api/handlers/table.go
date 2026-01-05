@@ -364,9 +364,10 @@ func CommitTable(database *db.DB, cfg *config.Config) fiber.Handler {
 				FOR UPDATE OF t
 			`, namespaceName, tableName).Scan(&tableID, &metadataLocation, &metadata)
 
-			if err == pgx.ErrNoRows {
+			if errors.Is(err, pgx.ErrNoRows) {
 				// Check if namespace exists to return appropriate error
 				var nsExists bool
+				//nolint:errcheck // Best effort check, default to table not found
 				_ = tx.QueryRow(c.Context(), `
 					SELECT EXISTS(SELECT 1 FROM namespaces WHERE name = $1)
 				`, namespaceName).Scan(&nsExists)
@@ -429,7 +430,8 @@ func CommitTable(database *db.DB, cfg *config.Config) fiber.Handler {
 				return fmt.Errorf("failed to update table: %w", err)
 			}
 
-			// Log the commit
+			// Log the commit (best effort, don't fail on logging error)
+			//nolint:errcheck
 			_, _ = tx.Exec(c.Context(), `
 				INSERT INTO commit_log (table_id, metadata_location)
 				VALUES ($1, $2)
