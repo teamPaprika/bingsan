@@ -86,11 +86,24 @@ Table commits use optimistic concurrency control:
 
 ### Distributed Locking
 
-PostgreSQL advisory locks prevent concurrent modifications:
+PostgreSQL row-level locking with configurable timeouts prevents concurrent modifications:
 
-- Namespace-level locks for CRUD
-- Table-level locks for commits
-- Automatic lock release on timeout
+- Row-level locks with `SELECT ... FOR UPDATE`
+- Configurable `lock_timeout` per transaction
+- Automatic retry with exponential backoff
+- Handles lock conflicts gracefully
+
+See [Distributed Locking]({{< relref "/docs/performance/locking" >}}) for configuration details.
+
+### Object Pooling
+
+Memory optimization through buffer reuse:
+
+- `sync.Pool`-based buffer pooling
+- Reduces GC pressure under high load
+- Prometheus metrics for pool health
+
+See [Object Pooling]({{< relref "/docs/performance/pooling" >}}) for implementation details.
 
 ## Sections
 

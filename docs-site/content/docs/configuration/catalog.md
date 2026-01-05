@@ -99,7 +99,11 @@ Tables created without a location will use `default_warehouse` if set, otherwise
 
 ## Distributed Locking
 
-Bingsan uses PostgreSQL advisory locks for distributed locking, ensuring consistency when multiple instances run against the same database.
+Bingsan uses PostgreSQL row-level locking with configurable timeouts for distributed locking, ensuring consistency when multiple instances run against the same database.
+
+{{< hint info >}}
+For detailed implementation and advanced tuning, see [Distributed Locking]({{< relref "/docs/performance/locking" >}}).
+{{< /hint >}}
 
 ### How It Works
 
