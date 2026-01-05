@@ -29,9 +29,12 @@ type Principal struct {
 
 // Auth returns an authentication middleware.
 func Auth(cfg *config.Config, database *db.DB) fiber.Handler {
+	// Build skip paths list based on config
+	skipPaths := buildSkipPaths(cfg.Compat.PolarisEnabled)
+
 	return func(c *fiber.Ctx) error {
 		// Skip auth for certain paths
-		if shouldSkipAuth(c.Path()) {
+		if shouldSkipAuth(c.Path(), skipPaths) {
 			return c.Next()
 		}
 
@@ -82,8 +85,8 @@ func Auth(cfg *config.Config, database *db.DB) fiber.Handler {
 	}
 }
 
-// shouldSkipAuth returns true if the path should skip authentication.
-func shouldSkipAuth(path string) bool {
+// buildSkipPaths returns the list of paths that should skip authentication.
+func buildSkipPaths(polarisEnabled bool) []string {
 	skipPaths := []string{
 		"/health",
 		"/ready",
@@ -91,6 +94,16 @@ func shouldSkipAuth(path string) bool {
 		"/v1/oauth/tokens",
 	}
 
+	// Add Polaris compatibility paths when enabled
+	if polarisEnabled {
+		skipPaths = append(skipPaths, "/api/catalog/v1/oauth/tokens")
+	}
+
+	return skipPaths
+}
+
+// shouldSkipAuth returns true if the path should skip authentication.
+func shouldSkipAuth(path string, skipPaths []string) bool {
 	for _, p := range skipPaths {
 		if path == p {
 			return true

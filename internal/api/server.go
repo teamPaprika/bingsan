@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sync"
 	"time"
 
@@ -23,6 +24,9 @@ import (
 	"github.com/kimuyb/bingsan/internal/events"
 	_ "github.com/kimuyb/bingsan/internal/metrics" // Register custom Prometheus metrics
 )
+
+// polarisPathPattern matches /api/catalog/v1/{segment}/...
+var polarisPathPattern = regexp.MustCompile(`^/api/catalog/v1/([^/]+)/(.*)$`)
 
 var (
 	promMiddlewareOnce sync.Once
@@ -103,6 +107,25 @@ func (s *Server) setupMiddleware() {
 
 	// Logging
 	s.app.Use(middleware.Logger())
+
+	// Polaris-compatible path rewriting (opt-in via config)
+	// Rewrites /api/catalog/v1/{catalog}/... to /v1/...
+	// This enables compatibility with polaris-tools benchmarks
+	// Note: oauth paths are excluded from rewriting (oauth is not a catalog name)
+	if s.config.Compat.PolarisEnabled {
+		s.app.Use(func(c *fiber.Ctx) error {
+			path := c.Path()
+			if matches := polarisPathPattern.FindStringSubmatch(path); matches != nil {
+				// matches[1] is the first segment after v1 (could be catalog name or oauth)
+				// matches[2] is the rest of the path
+				// Skip rewriting for oauth paths
+				if matches[1] != "oauth" {
+					c.Path("/v1/" + matches[2])
+				}
+			}
+			return c.Next()
+		})
+	}
 }
 
 // setupRoutes configures all API routes.
@@ -123,6 +146,19 @@ func (s *Server) setupRoutes() {
 
 	// OAuth2 endpoints (deprecated but required for compatibility)
 	v1.Post("/oauth/tokens", handlers.ExchangeToken(s.config, s.db))
+
+	// Polaris compatibility routes (opt-in via config)
+	if s.config.Compat.PolarisEnabled {
+		// Polaris-compatible OAuth endpoint (for polaris-tools benchmarks)
+		s.app.Post("/api/catalog/v1/oauth/tokens", handlers.ExchangeToken(s.config, s.db))
+
+		// Polaris Management API compatibility (for polaris-tools benchmarks)
+		// These are mock endpoints since bingsan is a single-catalog system
+		mgmt := s.app.Group("/api/management/v1")
+		mgmt.Post("/catalogs", handlers.PolarisCreateCatalog)
+		mgmt.Get("/catalogs", handlers.PolarisListCatalogs)
+		mgmt.Get("/catalogs/:name", handlers.PolarisGetCatalog)
+	}
 
 	// Apply auth middleware if enabled
 	if s.config.Auth.Enabled {

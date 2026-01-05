@@ -68,3 +68,13 @@ catalog:
   lock_timeout: 30s
   lock_retry_interval: 100ms
   max_lock_retries: 100
+
+# Compatibility layers (all disabled by default)
+compat:
+  # Enable Apache Polaris API compatibility
+  # When enabled, adds:
+  #   - Path rewriting: /api/catalog/v1/{catalog}/... -> /v1/...
+  #   - Polaris OAuth endpoint: /api/catalog/v1/oauth/tokens
+  #   - Mock Management API: /api/management/v1/catalogs
+  # Useful for running polaris-tools benchmarks
+  polaris_enabled: false

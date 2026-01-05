@@ -16,6 +16,16 @@ type Config struct {
 	Auth     AuthConfig     `mapstructure:"auth"`
 	Catalog  CatalogConfig  `mapstructure:"catalog"`
 	Pool     PoolConfig     `mapstructure:"pool"`
+	Compat   CompatConfig   `mapstructure:"compat"`
+}
+
+// CompatConfig holds compatibility layer configuration.
+type CompatConfig struct {
+	// PolarisEnabled enables Apache Polaris API compatibility.
+	// When enabled, adds path rewriting for /api/catalog/v1/{catalog}/...
+	// and mock Management API endpoints at /api/management/v1/catalogs.
+	// This is useful for running polaris-tools benchmarks.
+	PolarisEnabled bool `mapstructure:"polaris_enabled"`
 }
 
 // PoolConfig holds object pool configuration for performance optimization.
@@ -138,6 +148,15 @@ func Load() (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
+	// Explicitly bind nested environment variables (Viper doesn't auto-bind nested structs well)
+	_ = v.BindEnv("auth.enabled", "ICEBERG_AUTH_ENABLED")
+	_ = v.BindEnv("auth.oauth2.enabled", "ICEBERG_AUTH_OAUTH2_ENABLED")
+	_ = v.BindEnv("auth.oauth2.client_id", "ICEBERG_AUTH_OAUTH2_CLIENT_ID")
+	_ = v.BindEnv("auth.oauth2.client_secret", "ICEBERG_AUTH_OAUTH2_CLIENT_SECRET")
+	_ = v.BindEnv("auth.token_expiry", "ICEBERG_AUTH_TOKEN_EXPIRY")
+	_ = v.BindEnv("auth.signing_key", "ICEBERG_AUTH_SIGNING_KEY")
+	_ = v.BindEnv("compat.polaris_enabled", "ICEBERG_COMPAT_POLARIS_ENABLED")
+
 	// Read config file (optional)
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -198,4 +217,7 @@ func setDefaults(v *viper.Viper) {
 	// Pool defaults (for sync.Pool optimization)
 	v.SetDefault("pool.buffer_initial_size", 4096)  // 4KB - typical JSON metadata size
 	v.SetDefault("pool.buffer_max_size", 65536)     // 64KB - discard oversized buffers
+
+	// Compat defaults (compatibility layers disabled by default)
+	v.SetDefault("compat.polaris_enabled", false)
 }
