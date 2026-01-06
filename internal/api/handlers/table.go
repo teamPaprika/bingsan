@@ -13,6 +13,7 @@ import (
 
 	"github.com/kimuyb/bingsan/internal/config"
 	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/kimuyb/bingsan/internal/events"
 	"github.com/kimuyb/bingsan/internal/metrics"
 	"github.com/kimuyb/bingsan/internal/pool"
 )
@@ -193,7 +194,7 @@ func ListTables(database *db.DB) fiber.Handler {
 
 // CreateTable creates a new table.
 // POST /v1/{prefix}/namespaces/{namespace}/tables
-func CreateTable(database *db.DB, cfg *config.Config) fiber.Handler {
+func CreateTable(database *db.DB, cfg *config.Config, auditLogger *events.AuditLogger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		namespaceName := parseNamespace(c.Params("namespace"))
 
@@ -282,6 +283,12 @@ func CreateTable(database *db.DB, cfg *config.Config) fiber.Handler {
 
 		// Record metrics
 		metrics.RecordTableCreated(strings.Join(namespaceName, "."))
+
+		// Log audit event
+		event := events.NewEvent(events.TableCreated).
+			WithNamespace(strings.Join(namespaceName, ".")).
+			WithTable(req.Name)
+		LogAudit(c, auditLogger, event, fiber.StatusOK)
 
 		return c.JSON(LoadTableResponse{
 			MetadataLocation: metadataLocation,
@@ -490,7 +497,7 @@ func CommitTable(database *db.DB, cfg *config.Config) fiber.Handler {
 
 // DropTable deletes a table.
 // DELETE /v1/{prefix}/namespaces/{namespace}/tables/{table}
-func DropTable(database *db.DB) fiber.Handler {
+func DropTable(database *db.DB, auditLogger *events.AuditLogger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		namespaceName := parseNamespace(c.Params("namespace"))
 		tableName := c.Params("table")
@@ -524,6 +531,12 @@ func DropTable(database *db.DB) fiber.Handler {
 
 		// Record metrics
 		metrics.RecordTableDropped(strings.Join(namespaceName, "."))
+
+		// Log audit event
+		event := events.NewEvent(events.TableDropped).
+			WithNamespace(strings.Join(namespaceName, ".")).
+			WithTable(tableName)
+		LogAudit(c, auditLogger, event, fiber.StatusNoContent)
 
 		return c.SendStatus(fiber.StatusNoContent)
 	}
