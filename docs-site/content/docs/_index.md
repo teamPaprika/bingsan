@@ -32,5 +32,8 @@ Server, database, storage, and authentication configuration options.
 ### [Architecture]({{< relref "/docs/architecture" >}})
 System design, components, and scalability considerations.
 
+### [Performance]({{< relref "/docs/performance" >}})
+Object pooling, distributed locking, benchmarking, and tuning guides.
+
 ### [Deployment]({{< relref "/docs/deployment" >}})
 Production deployment guides for Docker and Kubernetes.
