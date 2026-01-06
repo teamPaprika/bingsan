@@ -98,7 +98,7 @@ jobs:
 
       - name: Build and start Bingsan
         run: |
-          go build -o bingsan ./cmd/bingsan
+          go build -o bingsan ./cmd/iceberg-catalog
           ./bingsan &
           sleep 5
         env:
