@@ -9,6 +9,7 @@ import (
 
 	"github.com/ansrivas/fiberprometheus/v2"
 	"github.com/goccy/go-json"
+	"github.com/gofiber/contrib/otelfiber/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -39,6 +40,7 @@ type Server struct {
 	config *config.Config
 	db     *db.DB
 	events *events.Broker
+	audit  *events.AuditLogger
 }
 
 // NewServer creates a new HTTP server.
@@ -56,11 +58,13 @@ func NewServer(cfg *config.Config, database *db.DB) *Server {
 		StrictRouting:         false, // /foo and /foo/ are the same
 	})
 
+	broker := events.NewBroker()
 	server := &Server{
 		app:    app,
 		config: cfg,
 		db:     database,
-		events: events.NewBroker(),
+		events: broker,
+		audit:  events.NewAuditLogger(database, broker, cfg.Audit.Enabled),
 	}
 
 	server.setupMiddleware()
@@ -74,6 +78,11 @@ func (s *Server) EventBroker() *events.Broker {
 	return s.events
 }
 
+// AuditLogger returns the audit logger for recording audit events.
+func (s *Server) AuditLogger() *events.AuditLogger {
+	return s.audit
+}
+
 // App returns the underlying Fiber app for testing.
 func (s *Server) App() *fiber.App {
 	return s.app
@@ -83,6 +92,11 @@ func (s *Server) App() *fiber.App {
 func (s *Server) setupMiddleware() {
 	// Request ID
 	s.app.Use(requestid.New())
+
+	// OpenTelemetry tracing (if enabled)
+	if s.config.Telemetry.Enabled {
+		s.app.Use(otelfiber.Middleware())
+	}
 
 	// Recovery from panics
 	s.app.Use(recover.New(recover.Config{
@@ -165,6 +179,28 @@ func (s *Server) setupRoutes() {
 		v1.Use(middleware.Auth(s.config, s.db))
 	}
 
+	// Apply authorization middleware if ACL is enabled
+	// Permission required based on HTTP method:
+	// - GET/HEAD -> read
+	// - POST/PUT/PATCH -> write
+	// - DELETE -> manage
+	if s.config.Auth.ACL.Enabled {
+		v1.Use(func(c *fiber.Ctx) error {
+			var required middleware.Permission
+			switch c.Method() {
+			case fiber.MethodGet, fiber.MethodHead:
+				required = middleware.PermissionRead
+			case fiber.MethodPost, fiber.MethodPut, fiber.MethodPatch:
+				required = middleware.PermissionWrite
+			case fiber.MethodDelete:
+				required = middleware.PermissionManage
+			default:
+				required = middleware.PermissionRead
+			}
+			return middleware.Authz(s.config, s.db, required)(c)
+		})
+	}
+
 	// Namespace routes
 	v1.Get("/namespaces", handlers.ListNamespaces(s.db))
 	v1.Post("/namespaces", handlers.CreateNamespace(s.db, s.events))
@@ -207,6 +243,12 @@ func (s *Server) setupRoutes() {
 	// Multi-table transactions
 	v1.Post("/transactions/commit", handlers.CommitTransaction(s.db, s.config))
 
+	// API key management (requires authentication)
+	v1.Get("/api-keys", handlers.ListAPIKeys(s.db))
+	v1.Post("/api-keys", handlers.CreateAPIKey(s.db))
+	v1.Post("/api-keys/:id/rotate", handlers.RotateAPIKey(s.db))
+	v1.Delete("/api-keys/:id", handlers.DeleteAPIKey(s.db))
+
 	// Also register with prefix for catalogs that use prefixes
 	// e.g., /v1/my-catalog/namespaces
 	prefix := v1.Group("/:prefix")
@@ -243,6 +285,15 @@ func (s *Server) setupRoutes() {
 // Start starts the HTTP server.
 func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.config.Server.Host, s.config.Server.Port)
+
+	if s.config.Server.TLS.Enabled {
+		slog.Info("server listening with TLS",
+			"address", addr,
+			"cert_file", s.config.Server.TLS.CertFile,
+		)
+		return s.app.ListenTLS(addr, s.config.Server.TLS.CertFile, s.config.Server.TLS.KeyFile)
+	}
+
 	slog.Info("server listening", "address", addr)
 	return s.app.Listen(addr)
 }

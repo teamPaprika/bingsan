@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"time"
 
@@ -134,13 +136,20 @@ func validateBearerToken(ctx context.Context, database *db.DB, token string) (*P
 	return &principal, nil
 }
 
-// validateAPIKey validates an API key.
+// RotationGracePeriod is the duration during which both old and new keys are valid after rotation.
+const RotationGracePeriod = 24 * time.Hour
+
+// validateAPIKey validates an API key, supporting key rotation.
+// During rotation, both the current key and the previous key are valid
+// for a grace period (24 hours from rotation).
 func validateAPIKey(ctx context.Context, database *db.DB, key string) (*Principal, error) {
 	keyHash := hashToken(key)
 
 	var principal Principal
 	var expiresAt *time.Time
+	var usedPreviousKey bool
 
+	// First try to match against the current key
 	err := database.Pool.QueryRow(ctx, `
 		SELECT id, name, scopes, expires_at
 		FROM api_keys
@@ -148,7 +157,20 @@ func validateAPIKey(ctx context.Context, database *db.DB, key string) (*Principa
 	`, keyHash).Scan(&principal.ID, &principal.ClientID, &principal.Scopes, &expiresAt)
 
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusUnauthorized, "invalid API key")
+		// If not found, try matching against the previous key (rotation grace period)
+		err = database.Pool.QueryRow(ctx, `
+			SELECT id, name, scopes, expires_at
+			FROM api_keys
+			WHERE previous_key_hash = $1
+			  AND rotated_at IS NOT NULL
+			  AND rotated_at > $2
+		`, keyHash, time.Now().Add(-RotationGracePeriod)).Scan(
+			&principal.ID, &principal.ClientID, &principal.Scopes, &expiresAt)
+
+		if err != nil {
+			return nil, fiber.NewError(fiber.StatusUnauthorized, "invalid API key")
+		}
+		usedPreviousKey = true
 	}
 
 	// Check expiration
@@ -163,15 +185,18 @@ func validateAPIKey(ctx context.Context, database *db.DB, key string) (*Principa
 
 	principal.Type = "api_key"
 
+	// Add indicator if using previous key (for logging/debugging)
+	if usedPreviousKey {
+		principal.Type = "api_key_rotated"
+	}
+
 	return &principal, nil
 }
 
-// hashToken creates a hash of a token for storage/lookup.
+// hashToken creates a SHA-256 hash of a token for storage/lookup.
 func hashToken(token string) string {
-	// In production, use a proper hash function like SHA-256
-	// For now, using a simple approach
-	// TODO: Implement proper token hashing
-	return token
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }
 
 // unauthorizedError returns a standardized unauthorized error.

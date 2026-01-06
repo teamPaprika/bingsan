@@ -104,3 +104,51 @@ func (e *CatalogEvent) Topic() string {
 	}
 	return "*"
 }
+
+// AuditEvent extends CatalogEvent with additional audit information.
+type AuditEvent struct {
+	CatalogEvent
+	ActorType    string `json:"actor_type,omitempty"`    // "api_key", "oauth2", "anonymous"
+	IPAddress    string `json:"ip_address,omitempty"`
+	UserAgent    string `json:"user_agent,omitempty"`
+	RequestID    string `json:"request_id,omitempty"`
+	ResponseCode int    `json:"response_code,omitempty"`
+}
+
+// NewAuditEvent creates a new audit event from a catalog event.
+func NewAuditEvent(event *CatalogEvent) *AuditEvent {
+	return &AuditEvent{
+		CatalogEvent: *event,
+		ActorType:    "anonymous",
+	}
+}
+
+// WithActorType sets the actor type for the audit event.
+func (e *AuditEvent) WithActorType(actorType string) *AuditEvent {
+	e.ActorType = actorType
+	return e
+}
+
+// WithIPAddress sets the IP address for the audit event.
+func (e *AuditEvent) WithIPAddress(ip string) *AuditEvent {
+	e.IPAddress = ip
+	return e
+}
+
+// WithUserAgent sets the user agent for the audit event.
+func (e *AuditEvent) WithUserAgent(ua string) *AuditEvent {
+	e.UserAgent = ua
+	return e
+}
+
+// WithRequestID sets the request ID for the audit event.
+func (e *AuditEvent) WithRequestID(reqID string) *AuditEvent {
+	e.RequestID = reqID
+	return e
+}
+
+// WithResponseCode sets the response code for the audit event.
+func (e *AuditEvent) WithResponseCode(code int) *AuditEvent {
+	e.ResponseCode = code
+	return e
+}
