@@ -99,8 +99,22 @@ jobs:
       - name: Build and start Bingsan
         run: |
           go build -o bingsan ./cmd/iceberg-catalog
-          ./bingsan &
-          sleep 5
+          ./bingsan > bingsan.log 2>&1 &
+
+          # Wait for server to start
+          for i in {1..30}; do
+            if curl -sf http://localhost:8181/health > /dev/null 2>&1; then
+              echo "Bingsan is healthy"
+              break
+            fi
+            echo "Waiting for Bingsan... ($i/30)"
+            sleep 1
+            if [ $i -eq 30 ]; then
+              echo "Bingsan failed to start. Logs:"
+              cat bingsan.log
+              exit 1
+            fi
+          done
         env:
           BINGSAN_SERVER_HOST: "0.0.0.0"
           BINGSAN_SERVER_PORT: "8181"
