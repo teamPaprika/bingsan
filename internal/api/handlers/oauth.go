@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"time"
 
@@ -109,11 +110,15 @@ func ExchangeToken(cfg *config.Config, database *db.DB) fiber.Handler {
 		expiresIn := int(cfg.Auth.TokenExpiry.Seconds())
 		expiresAt := time.Now().Add(cfg.Auth.TokenExpiry)
 
-		// Store token in database
+		// Hash token before storing
+		tokenHash := sha256.Sum256([]byte(accessToken))
+		tokenHashHex := hex.EncodeToString(tokenHash[:])
+
+		// Store hashed token in database
 		_, err = database.Pool.Exec(c.Context(), `
 			INSERT INTO oauth_tokens (access_token_hash, client_id, scopes, expires_at)
 			VALUES ($1, $2, $3, $4)
-		`, accessToken, req.ClientID, []string{req.Scope}, expiresAt)
+		`, tokenHashHex, req.ClientID, []string{req.Scope}, expiresAt)
 
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

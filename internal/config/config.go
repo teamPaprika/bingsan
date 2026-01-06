@@ -10,13 +10,30 @@ import (
 
 // Config holds all configuration for the catalog.
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Storage  StorageConfig  `mapstructure:"storage"`
-	Auth     AuthConfig     `mapstructure:"auth"`
-	Catalog  CatalogConfig  `mapstructure:"catalog"`
-	Pool     PoolConfig     `mapstructure:"pool"`
-	Compat   CompatConfig   `mapstructure:"compat"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Storage   StorageConfig   `mapstructure:"storage"`
+	Auth      AuthConfig      `mapstructure:"auth"`
+	Audit     AuditConfig     `mapstructure:"audit"`
+	Catalog   CatalogConfig   `mapstructure:"catalog"`
+	Pool      PoolConfig      `mapstructure:"pool"`
+	Compat    CompatConfig    `mapstructure:"compat"`
+	Telemetry TelemetryConfig `mapstructure:"telemetry"`
+}
+
+// TelemetryConfig holds OpenTelemetry configuration.
+type TelemetryConfig struct {
+	Enabled    bool    `mapstructure:"enabled"`
+	Endpoint   string  `mapstructure:"endpoint"`    // OTLP HTTP endpoint
+	SampleRate float64 `mapstructure:"sample_rate"` // 0.0-1.0 sampling rate
+	Insecure   bool    `mapstructure:"insecure"`    // Use HTTP instead of HTTPS
+}
+
+// AuditConfig holds audit logging configuration.
+type AuditConfig struct {
+	Enabled       bool   `mapstructure:"enabled"`
+	RetentionDays int    `mapstructure:"retention_days"` // Days to keep audit logs
+	LogLevel      string `mapstructure:"log_level"`      // "all", "write", "manage"
 }
 
 // CompatConfig holds compatibility layer configuration.
@@ -43,6 +60,14 @@ type ServerConfig struct {
 	ReadTimeout  time.Duration `mapstructure:"read_timeout"`
 	WriteTimeout time.Duration `mapstructure:"write_timeout"`
 	IdleTimeout  time.Duration `mapstructure:"idle_timeout"`
+	TLS          TLSConfig     `mapstructure:"tls"`
+}
+
+// TLSConfig holds TLS configuration.
+type TLSConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	CertFile string `mapstructure:"cert_file"` // Path to TLS certificate
+	KeyFile  string `mapstructure:"key_file"`  // Path to TLS private key
 }
 
 // DatabaseConfig holds PostgreSQL configuration.
@@ -78,19 +103,24 @@ type StorageConfig struct {
 
 // S3Config holds S3/MinIO configuration.
 type S3Config struct {
-	Endpoint        string `mapstructure:"endpoint"`
-	Region          string `mapstructure:"region"`
-	AccessKeyID     string `mapstructure:"access_key_id"`
-	SecretAccessKey string `mapstructure:"secret_access_key"`
-	Bucket          string `mapstructure:"bucket"`
-	UsePathStyle    bool   `mapstructure:"use_path_style"` // For MinIO
+	Endpoint        string        `mapstructure:"endpoint"`
+	Region          string        `mapstructure:"region"`
+	AccessKeyID     string        `mapstructure:"access_key_id"`
+	SecretAccessKey string        `mapstructure:"secret_access_key"`
+	Bucket          string        `mapstructure:"bucket"`
+	UsePathStyle    bool          `mapstructure:"use_path_style"` // For MinIO
+	RoleARN         string        `mapstructure:"role_arn"`       // For STS AssumeRole
+	ExternalID      string        `mapstructure:"external_id"`    // Optional external ID for cross-account access
+	SessionDuration time.Duration `mapstructure:"session_duration"` // Duration for assumed role (default 1h)
 }
 
 // GCSConfig holds Google Cloud Storage configuration.
 type GCSConfig struct {
-	Project         string `mapstructure:"project"`
-	CredentialsFile string `mapstructure:"credentials_file"`
-	Bucket          string `mapstructure:"bucket"`
+	Project                    string        `mapstructure:"project"`
+	CredentialsFile            string        `mapstructure:"credentials_file"`
+	Bucket                     string        `mapstructure:"bucket"`
+	ImpersonateServiceAccount  string        `mapstructure:"impersonate_service_account"` // SA email for impersonation
+	TokenLifetime              time.Duration `mapstructure:"token_lifetime"`              // Duration for impersonated tokens
 }
 
 // LocalConfig holds local filesystem configuration.
@@ -103,8 +133,15 @@ type AuthConfig struct {
 	Enabled      bool          `mapstructure:"enabled"`
 	OAuth2       OAuth2Config  `mapstructure:"oauth2"`
 	APIKey       APIKeyConfig  `mapstructure:"api_key"`
+	ACL          ACLConfig     `mapstructure:"acl"`
 	TokenExpiry  time.Duration `mapstructure:"token_expiry"`
 	SigningKey   string        `mapstructure:"signing_key"`
+}
+
+// ACLConfig holds namespace-level access control configuration.
+type ACLConfig struct {
+	Enabled           bool   `mapstructure:"enabled"`
+	DefaultPermission string `mapstructure:"default_permission"` // "none", "read", "write", "manage"
 }
 
 // OAuth2Config holds OAuth2 configuration.
@@ -182,6 +219,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.read_timeout", 30*time.Second)
 	v.SetDefault("server.write_timeout", 30*time.Second)
 	v.SetDefault("server.idle_timeout", 120*time.Second)
+	v.SetDefault("server.tls.enabled", false)
 
 	// Database defaults
 	v.SetDefault("database.host", "localhost")
@@ -201,12 +239,21 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("storage.local.root_path", "/tmp/iceberg/data")
 	v.SetDefault("storage.s3.region", "us-east-1")
 	v.SetDefault("storage.s3.use_path_style", false)
+	v.SetDefault("storage.s3.session_duration", 1*time.Hour)
+	v.SetDefault("storage.gcs.token_lifetime", 1*time.Hour)
 
 	// Auth defaults
 	v.SetDefault("auth.enabled", false)
 	v.SetDefault("auth.oauth2.enabled", false)
 	v.SetDefault("auth.api_key.enabled", false)
+	v.SetDefault("auth.acl.enabled", false)
+	v.SetDefault("auth.acl.default_permission", "none")
 	v.SetDefault("auth.token_expiry", 1*time.Hour)
+
+	// Audit defaults
+	v.SetDefault("audit.enabled", false)
+	v.SetDefault("audit.retention_days", 90)
+	v.SetDefault("audit.log_level", "all")
 
 	// Catalog defaults
 	v.SetDefault("catalog.prefix", "")
@@ -220,4 +267,10 @@ func setDefaults(v *viper.Viper) {
 
 	// Compat defaults (compatibility layers disabled by default)
 	v.SetDefault("compat.polaris_enabled", false)
+
+	// Telemetry defaults (OpenTelemetry disabled by default)
+	v.SetDefault("telemetry.enabled", false)
+	v.SetDefault("telemetry.endpoint", "localhost:4318")
+	v.SetDefault("telemetry.sample_rate", 0.1)
+	v.SetDefault("telemetry.insecure", true)
 }

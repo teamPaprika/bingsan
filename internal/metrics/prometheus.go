@@ -75,6 +75,20 @@ var (
 		Name:      "db_connections_total",
 		Help:      "Total number of database connections in pool",
 	})
+
+	// LeaderStatus tracks whether this node is the leader for a task.
+	LeaderStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "iceberg",
+		Name:      "leader_status",
+		Help:      "Whether this node is the leader for a task (1=leader, 0=follower)",
+	}, []string{"task"})
+
+	// BackgroundTaskRuns tracks the total number of background task executions.
+	BackgroundTaskRuns = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "iceberg",
+		Name:      "background_task_runs_total",
+		Help:      "Total number of background task executions",
+	}, []string{"task", "status"})
 )
 
 // RecordNamespaceCreated increments the namespace counter.
@@ -127,4 +141,14 @@ func UpdateDBPoolStats(active, idle, total int) {
 	DBConnectionsActive.Set(float64(active))
 	DBConnectionsIdle.Set(float64(idle))
 	DBConnectionsTotal.Set(float64(total))
+}
+
+// SetLeaderStatus sets the leader status for a task.
+func SetLeaderStatus(task string, status float64) {
+	LeaderStatus.WithLabelValues(task).Set(status)
+}
+
+// IncBackgroundTaskRuns increments the background task run counter.
+func IncBackgroundTaskRuns(task, status string) {
+	BackgroundTaskRuns.WithLabelValues(task, status).Inc()
 }
