@@ -2,14 +2,19 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/kimuyb/bingsan/internal/api"
+	"github.com/kimuyb/bingsan/internal/background"
 	"github.com/kimuyb/bingsan/internal/config"
 	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/kimuyb/bingsan/internal/leader"
+	"github.com/kimuyb/bingsan/internal/telemetry"
 )
 
 func main() {
@@ -44,6 +49,27 @@ func run() error {
 		"port", cfg.Server.Port,
 	)
 
+	// Initialize OpenTelemetry (if enabled)
+	ctx := context.Background()
+	telemetryProvider, err := telemetry.NewProvider(ctx, telemetry.Config{
+		Enabled:    cfg.Telemetry.Enabled,
+		Endpoint:   cfg.Telemetry.Endpoint,
+		SampleRate: cfg.Telemetry.SampleRate,
+		Insecure:   cfg.Telemetry.Insecure,
+	}, "bingsan", cfg.Server.Version)
+	if err != nil {
+		return fmt.Errorf("initializing telemetry: %w", err)
+	}
+	if telemetryProvider != nil {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if shutdownErr := telemetryProvider.Shutdown(shutdownCtx); shutdownErr != nil {
+				slog.Error("error shutting down telemetry", "error", shutdownErr)
+			}
+		}()
+	}
+
 	// Initialize database connection
 	database, err := db.New(cfg.Database)
 	if err != nil {
@@ -55,6 +81,20 @@ func run() error {
 	if err := database.Migrate(); err != nil {
 		return err
 	}
+
+	// Initialize leader election for background tasks
+	nodeID := generateNodeID()
+	elector := leader.NewElector(database.Pool, nodeID)
+	defer func() {
+		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = elector.ReleaseAll(releaseCtx)
+	}()
+
+	// Initialize and start background task runner
+	taskRunner := background.NewRunner(elector, database)
+	taskRunner.Start(ctx)
+	defer taskRunner.Stop()
 
 	// Initialize and start HTTP server
 	server := api.NewServer(cfg, database)
@@ -79,4 +119,14 @@ func run() error {
 
 	slog.Info("server stopped")
 	return nil
+}
+
+
+// generateNodeID creates a unique identifier for this node.
+func generateNodeID() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+	}
+	return fmt.Sprintf("%s-%d", hostname, os.Getpid())
 }

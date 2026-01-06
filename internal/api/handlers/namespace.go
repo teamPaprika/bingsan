@@ -113,7 +113,7 @@ func ListNamespaces(database *db.DB) fiber.Handler {
 
 // CreateNamespace creates a new namespace.
 // POST /v1/{prefix}/namespaces
-func CreateNamespace(database *db.DB, broker ...*events.Broker) fiber.Handler {
+func CreateNamespace(database *db.DB, auditLogger *events.AuditLogger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req CreateNamespaceRequest
 		if err := c.BodyParser(&req); err != nil {
@@ -146,12 +146,10 @@ func CreateNamespace(database *db.DB, broker ...*events.Broker) fiber.Handler {
 		// Record metrics
 		metrics.RecordNamespaceCreated()
 
-		// Publish event
-		if len(broker) > 0 && broker[0] != nil {
-			event := events.NewEvent(events.NamespaceCreated).
-				WithNamespace(strings.Join(req.Namespace, "."))
-			broker[0].Publish(*event)
-		}
+		// Log audit event
+		event := events.NewEvent(events.NamespaceCreated).
+			WithNamespace(strings.Join(req.Namespace, "."))
+		LogAudit(c, auditLogger, event, fiber.StatusOK)
 
 		return c.Status(fiber.StatusOK).JSON(Namespace{
 			Namespace:  req.Namespace,
@@ -210,7 +208,7 @@ func NamespaceExists(database *db.DB) fiber.Handler {
 
 // DeleteNamespace deletes an empty namespace.
 // DELETE /v1/{prefix}/namespaces/{namespace}
-func DeleteNamespace(database *db.DB, broker ...*events.Broker) fiber.Handler {
+func DeleteNamespace(database *db.DB, auditLogger *events.AuditLogger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		namespaceName := parseNamespace(c.Params("namespace"))
 
@@ -263,12 +261,10 @@ func DeleteNamespace(database *db.DB, broker ...*events.Broker) fiber.Handler {
 		// Record metrics
 		metrics.RecordNamespaceDropped()
 
-		// Publish event
-		if len(broker) > 0 && broker[0] != nil {
-			event := events.NewEvent(events.NamespaceDropped).
-				WithNamespace(strings.Join(namespaceName, "."))
-			broker[0].Publish(*event)
-		}
+		// Log audit event
+		event := events.NewEvent(events.NamespaceDropped).
+			WithNamespace(strings.Join(namespaceName, "."))
+		LogAudit(c, auditLogger, event, fiber.StatusNoContent)
 
 		return c.SendStatus(fiber.StatusNoContent)
 	}
