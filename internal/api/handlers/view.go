@@ -13,6 +13,7 @@ import (
 
 	"github.com/kimuyb/bingsan/internal/config"
 	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/kimuyb/bingsan/internal/events"
 	"github.com/kimuyb/bingsan/internal/pool"
 )
 
@@ -140,7 +141,7 @@ func ListViews(database *db.DB) fiber.Handler {
 
 // CreateView creates a new view.
 // POST /v1/{prefix}/namespaces/{namespace}/views
-func CreateView(database *db.DB, cfg *config.Config) fiber.Handler {
+func CreateView(database *db.DB, cfg *config.Config, auditLogger *events.AuditLogger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		namespaceName := parseNamespace(c.Params("namespace"))
 
@@ -220,6 +221,12 @@ func CreateView(database *db.DB, cfg *config.Config) fiber.Handler {
 			}
 			return internalError(c, "failed to create view", err)
 		}
+
+		// Log audit event
+		event := events.NewEvent(events.ViewCreated).
+			WithNamespace(strings.Join(namespaceName, ".")).
+			WithView(req.Name)
+		LogAudit(c, auditLogger, event, fiber.StatusOK)
 
 		return c.JSON(LoadViewResponse{
 			MetadataLocation: metadataLocation,
@@ -397,7 +404,7 @@ func ReplaceView(database *db.DB, cfg *config.Config) fiber.Handler {
 
 // DropView deletes a view.
 // DELETE /v1/{prefix}/namespaces/{namespace}/views/{view}
-func DropView(database *db.DB) fiber.Handler {
+func DropView(database *db.DB, auditLogger *events.AuditLogger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		namespaceName := parseNamespace(c.Params("namespace"))
 		viewName := c.Params("view")
@@ -424,6 +431,12 @@ func DropView(database *db.DB) fiber.Handler {
 			}
 			return viewNotFound(c, namespaceName, viewName)
 		}
+
+		// Log audit event
+		event := events.NewEvent(events.ViewDropped).
+			WithNamespace(strings.Join(namespaceName, ".")).
+			WithView(viewName)
+		LogAudit(c, auditLogger, event, fiber.StatusNoContent)
 
 		return c.SendStatus(fiber.StatusNoContent)
 	}
