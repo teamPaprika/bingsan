@@ -19,6 +19,7 @@ type Config struct {
 	Pool      PoolConfig      `mapstructure:"pool"`
 	Compat    CompatConfig    `mapstructure:"compat"`
 	Telemetry TelemetryConfig `mapstructure:"telemetry"`
+	Scan      ScanConfig      `mapstructure:"scan"`
 }
 
 // TelemetryConfig holds OpenTelemetry configuration.
@@ -27,6 +28,25 @@ type TelemetryConfig struct {
 	Endpoint   string  `mapstructure:"endpoint"`    // OTLP HTTP endpoint
 	SampleRate float64 `mapstructure:"sample_rate"` // 0.0-1.0 sampling rate
 	Insecure   bool    `mapstructure:"insecure"`    // Use HTTP instead of HTTPS
+}
+
+// ScanConfig holds server-side scan planning configuration.
+type ScanConfig struct {
+	Enabled                bool          `mapstructure:"enabled"`                  // Enable scan planning
+	AsyncThreshold         int           `mapstructure:"async_threshold"`          // Files above which async planning is used
+	MaxConcurrentManifests int           `mapstructure:"max_concurrent_manifests"` // Parallel manifest reads
+	PlanTaskBatchSize      int           `mapstructure:"plan_task_batch_size"`     // Files per plan-task
+	PlanExpiry             time.Duration `mapstructure:"plan_expiry"`              // How long to keep plans
+}
+
+// ToScanPlannerConfig converts ScanConfig to scan.Config.
+func (c ScanConfig) ToScanPlannerConfig() map[string]any {
+	return map[string]any{
+		"async_threshold":          c.AsyncThreshold,
+		"max_concurrent_manifests": c.MaxConcurrentManifests,
+		"plan_task_batch_size":     c.PlanTaskBatchSize,
+		"plan_expiry":              c.PlanExpiry,
+	}
 }
 
 // AuditConfig holds audit logging configuration.
@@ -273,4 +293,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("telemetry.endpoint", "localhost:4318")
 	v.SetDefault("telemetry.sample_rate", 0.1)
 	v.SetDefault("telemetry.insecure", true)
+
+	// Scan planning defaults
+	v.SetDefault("scan.enabled", true)
+	v.SetDefault("scan.async_threshold", 100)           // Files above which async is used
+	v.SetDefault("scan.max_concurrent_manifests", 10)   // Parallel manifest reads
+	v.SetDefault("scan.plan_task_batch_size", 50)       // Files per plan-task
+	v.SetDefault("scan.plan_expiry", 1*time.Hour)       // Plans expire after 1 hour
 }

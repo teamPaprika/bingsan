@@ -55,6 +55,49 @@ var (
 		Help:      "Total number of scan plans submitted",
 	}, []string{"status"})
 
+	// ScanPlanDuration tracks the duration of scan planning operations.
+	ScanPlanDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "iceberg",
+		Name:      "scan_plan_duration_seconds",
+		Help:      "Duration of scan planning operations in seconds",
+		Buckets:   []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
+	}, []string{"mode"}) // mode: "sync" or "async"
+
+	// ScanFilesTotal tracks the total number of files included in scan plans.
+	ScanFilesTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "iceberg",
+		Name:      "scan_files_total",
+		Help:      "Total number of data files included in scan plans",
+	})
+
+	// ScanFilesPruned tracks the total number of files pruned by filter pushdown.
+	ScanFilesPruned = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "iceberg",
+		Name:      "scan_files_pruned_total",
+		Help:      "Total number of data files pruned by filter predicate pushdown",
+	})
+
+	// ScanManifestsRead tracks the total number of manifest files read.
+	ScanManifestsRead = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "iceberg",
+		Name:      "scan_manifests_read_total",
+		Help:      "Total number of manifest files read during scan planning",
+	})
+
+	// ScanPlanMode tracks the distribution of sync vs async scan plans.
+	ScanPlanMode = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "iceberg",
+		Name:      "scan_plan_mode_total",
+		Help:      "Total number of scan plans by execution mode",
+	}, []string{"mode"}) // mode: "sync" or "async"
+
+	// ScanActivePlans tracks the number of currently running async scan plans.
+	ScanActivePlans = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "iceberg",
+		Name:      "scan_active_plans",
+		Help:      "Number of currently running async scan plans",
+	})
+
 	// DBConnectionsActive tracks the number of active database connections.
 	DBConnectionsActive = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "iceberg",
@@ -151,4 +194,35 @@ func SetLeaderStatus(task string, status float64) {
 // IncBackgroundTaskRuns increments the background task run counter.
 func IncBackgroundTaskRuns(task, status string) {
 	BackgroundTaskRuns.WithLabelValues(task, status).Inc()
+}
+
+// RecordScanPlanDuration records the duration of a scan planning operation.
+func RecordScanPlanDuration(mode string, durationSeconds float64) {
+	ScanPlanDuration.WithLabelValues(mode).Observe(durationSeconds)
+}
+
+// RecordScanFiles records the number of files in a scan plan.
+func RecordScanFiles(total, pruned int) {
+	ScanFilesTotal.Add(float64(total))
+	ScanFilesPruned.Add(float64(pruned))
+}
+
+// RecordScanManifestsRead records the number of manifests read.
+func RecordScanManifestsRead(count int) {
+	ScanManifestsRead.Add(float64(count))
+}
+
+// RecordScanPlanMode records the execution mode of a scan plan.
+func RecordScanPlanMode(mode string) {
+	ScanPlanMode.WithLabelValues(mode).Inc()
+}
+
+// IncScanActivePlans increments the active async scan plans gauge.
+func IncScanActivePlans() {
+	ScanActivePlans.Inc()
+}
+
+// DecScanActivePlans decrements the active async scan plans gauge.
+func DecScanActivePlans() {
+	ScanActivePlans.Dec()
 }

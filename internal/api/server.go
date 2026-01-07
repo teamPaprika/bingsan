@@ -24,6 +24,7 @@ import (
 	"github.com/kimuyb/bingsan/internal/db"
 	"github.com/kimuyb/bingsan/internal/events"
 	_ "github.com/kimuyb/bingsan/internal/metrics" // Register custom Prometheus metrics
+	"github.com/kimuyb/bingsan/internal/scan"
 )
 
 // polarisPathPattern matches /api/catalog/v1/{segment}/...
@@ -36,11 +37,12 @@ var (
 
 // Server represents the HTTP server.
 type Server struct {
-	app    *fiber.App
-	config *config.Config
-	db     *db.DB
-	events *events.Broker
-	audit  *events.AuditLogger
+	app         *fiber.App
+	config      *config.Config
+	db          *db.DB
+	events      *events.Broker
+	audit       *events.AuditLogger
+	scanPlanner *scan.Planner
 }
 
 // NewServer creates a new HTTP server.
@@ -86,6 +88,16 @@ func (s *Server) AuditLogger() *events.AuditLogger {
 // App returns the underlying Fiber app for testing.
 func (s *Server) App() *fiber.App {
 	return s.app
+}
+
+// SetScanPlanner sets the scan planner for scan planning handlers.
+func (s *Server) SetScanPlanner(planner *scan.Planner) {
+	s.scanPlanner = planner
+}
+
+// ScanPlanner returns the scan planner.
+func (s *Server) ScanPlanner() *scan.Planner {
+	return s.scanPlanner
 }
 
 // setupMiddleware configures global middleware.
@@ -220,10 +232,11 @@ func (s *Server) setupRoutes() {
 	v1.Post("/namespaces/:namespace/tables/:table/metrics", handlers.ReportMetrics())
 
 	// Scan planning routes (Iceberg REST spec compliant)
-	v1.Post("/namespaces/:namespace/tables/:table/plan", handlers.SubmitScanPlan(s.db))
-	v1.Get("/namespaces/:namespace/tables/:table/plan/:planId", handlers.GetScanPlan(s.db))
+	plannerGetter := func() *scan.Planner { return s.scanPlanner }
+	v1.Post("/namespaces/:namespace/tables/:table/plan", handlers.SubmitScanPlan(s.db, plannerGetter))
+	v1.Get("/namespaces/:namespace/tables/:table/plan/:planId", handlers.GetScanPlan(s.db, plannerGetter))
 	v1.Delete("/namespaces/:namespace/tables/:table/plan/:planId", handlers.CancelScanPlan(s.db))
-	v1.Post("/namespaces/:namespace/tables/:table/tasks", handlers.FetchPlanTasks(s.db))
+	v1.Post("/namespaces/:namespace/tables/:table/tasks", handlers.FetchPlanTasks(s.db, plannerGetter))
 
 	// Table registration
 	v1.Post("/namespaces/:namespace/register", handlers.RegisterTable(s.db, s.config))
@@ -266,10 +279,10 @@ func (s *Server) setupRoutes() {
 	prefix.Head("/namespaces/:namespace/tables/:table", handlers.TableExists(s.db))
 	prefix.Get("/namespaces/:namespace/tables/:table/credentials", handlers.LoadCredentials(s.config))
 	prefix.Post("/namespaces/:namespace/tables/:table/metrics", handlers.ReportMetrics())
-	prefix.Post("/namespaces/:namespace/tables/:table/plan", handlers.SubmitScanPlan(s.db))
-	prefix.Get("/namespaces/:namespace/tables/:table/plan/:planId", handlers.GetScanPlan(s.db))
+	prefix.Post("/namespaces/:namespace/tables/:table/plan", handlers.SubmitScanPlan(s.db, plannerGetter))
+	prefix.Get("/namespaces/:namespace/tables/:table/plan/:planId", handlers.GetScanPlan(s.db, plannerGetter))
 	prefix.Delete("/namespaces/:namespace/tables/:table/plan/:planId", handlers.CancelScanPlan(s.db))
-	prefix.Post("/namespaces/:namespace/tables/:table/tasks", handlers.FetchPlanTasks(s.db))
+	prefix.Post("/namespaces/:namespace/tables/:table/tasks", handlers.FetchPlanTasks(s.db, plannerGetter))
 	prefix.Post("/namespaces/:namespace/register", handlers.RegisterTable(s.db, s.config))
 	prefix.Get("/namespaces/:namespace/views", handlers.ListViews(s.db))
 	prefix.Post("/namespaces/:namespace/views", handlers.CreateView(s.db, s.config, s.audit))

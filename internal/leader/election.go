@@ -10,8 +10,9 @@ import (
 
 // Advisory lock keys (arbitrary int64 values for PostgreSQL advisory locks)
 const (
-	LockKeyCleanup int64 = 1 // For cleanup background tasks
-	LockKeyMetrics int64 = 2 // For metrics aggregation tasks
+	LockKeyCleanup      int64 = 1 // For cleanup background tasks
+	LockKeyMetrics      int64 = 2 // For metrics aggregation tasks
+	LockKeyScanPlanning int64 = 3 // For async scan plan processing
 )
 
 // Elector manages leader election using PostgreSQL advisory locks.

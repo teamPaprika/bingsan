@@ -14,6 +14,8 @@ import (
 	"github.com/kimuyb/bingsan/internal/config"
 	"github.com/kimuyb/bingsan/internal/db"
 	"github.com/kimuyb/bingsan/internal/leader"
+	"github.com/kimuyb/bingsan/internal/scan"
+	"github.com/kimuyb/bingsan/internal/storage"
 	"github.com/kimuyb/bingsan/internal/telemetry"
 )
 
@@ -93,11 +95,36 @@ func run() error {
 
 	// Initialize and start background task runner
 	taskRunner := background.NewRunner(elector, database)
+
+	// Initialize scan planner (if enabled)
+	var scanPlanner *scan.Planner
+	if cfg.Scan.Enabled {
+		storageClient, err := createStorageClient(cfg)
+		if err != nil {
+			slog.Warn("scan planning disabled: failed to create storage client", "error", err)
+		} else {
+			scanPlanner = scan.NewPlanner(storageClient, database, scan.Config{
+				AsyncThreshold:         cfg.Scan.AsyncThreshold,
+				MaxConcurrentManifests: cfg.Scan.MaxConcurrentManifests,
+				PlanTaskBatchSize:      cfg.Scan.PlanTaskBatchSize,
+				PlanExpiry:             cfg.Scan.PlanExpiry,
+			})
+			taskRunner.SetScanPlanner(scanPlanner)
+			slog.Info("scan planning enabled",
+				"async_threshold", cfg.Scan.AsyncThreshold,
+				"storage_type", cfg.Storage.Type,
+			)
+		}
+	}
+
 	taskRunner.Start(ctx)
 	defer taskRunner.Stop()
 
 	// Initialize and start HTTP server
 	server := api.NewServer(cfg, database)
+	if scanPlanner != nil {
+		server.SetScanPlanner(scanPlanner)
+	}
 
 	// Graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -129,4 +156,18 @@ func generateNodeID() string {
 		hostname = "unknown"
 	}
 	return fmt.Sprintf("%s-%d", hostname, os.Getpid())
+}
+
+// createStorageClient creates a storage client based on configuration.
+func createStorageClient(cfg *config.Config) (storage.Client, error) {
+	switch cfg.Storage.Type {
+	case "s3":
+		return storage.NewS3Client(&cfg.Storage.S3)
+	case "gcs":
+		return storage.NewGCSClient(&cfg.Storage.GCS)
+	case "local":
+		return storage.NewLocalClient(&cfg.Storage.Local)
+	default:
+		return nil, fmt.Errorf("unsupported storage type: %s", cfg.Storage.Type)
+	}
 }
