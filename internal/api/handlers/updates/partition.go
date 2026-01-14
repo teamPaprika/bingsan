@@ -95,39 +95,15 @@ func (p *Processor) applySetDefaultSpec(u *SetDefaultSpec) error {
 
 // applyRemovePartitionSpecs removes partition specs by ID.
 func (p *Processor) applyRemovePartitionSpecs(u *RemovePartitionSpecs) error {
-	if len(u.SpecIDs) == 0 {
-		return nil
-	}
-
 	specs, ok := getSlice(p.metadata, "partition-specs")
-	if !ok || len(specs) == 0 {
+	if !ok {
 		return nil
 	}
 
-	// Build set of IDs to remove
-	toRemove := make(map[int]bool, len(u.SpecIDs))
-	for _, id := range u.SpecIDs {
-		toRemove[id] = true
-	}
-
-	// Check we're not removing the default spec
 	defaultSpecID, _ := getInt(p.metadata, "default-spec-id")
-	if toRemove[defaultSpecID] {
-		return fmt.Errorf("cannot remove default partition spec %d", defaultSpecID)
-	}
-
-	// Filter specs
-	filtered := filterSlice(specs, func(item any) bool {
-		if spec, ok := item.(map[string]any); ok {
-			if id, ok := getInt(spec, "spec-id"); ok {
-				return !toRemove[id]
-			}
-		}
-		return true
-	})
-
-	if len(filtered) == 0 {
-		return fmt.Errorf("cannot remove all partition specs")
+	filtered, err := removeItemsByID(specs, u.SpecIDs, "spec-id", defaultSpecID, "default partition spec")
+	if err != nil {
+		return err
 	}
 
 	p.metadata["partition-specs"] = filtered

@@ -104,39 +104,15 @@ func (p *Processor) applySetCurrentSchema(u *SetCurrentSchema) error {
 
 // applyRemoveSchemas removes schema versions by ID.
 func (p *Processor) applyRemoveSchemas(u *RemoveSchemas) error {
-	if len(u.SchemaIDs) == 0 {
-		return nil
-	}
-
 	schemas, ok := getSlice(p.metadata, "schemas")
-	if !ok || len(schemas) == 0 {
+	if !ok {
 		return nil
 	}
 
-	// Build set of IDs to remove
-	toRemove := make(map[int]bool, len(u.SchemaIDs))
-	for _, id := range u.SchemaIDs {
-		toRemove[id] = true
-	}
-
-	// Check we're not removing the current schema
 	currentSchemaID, _ := getInt(p.metadata, "current-schema-id")
-	if toRemove[currentSchemaID] {
-		return fmt.Errorf("cannot remove current schema %d", currentSchemaID)
-	}
-
-	// Filter schemas
-	filtered := filterSlice(schemas, func(item any) bool {
-		if schema, ok := item.(map[string]any); ok {
-			if id, ok := getInt(schema, "schema-id"); ok {
-				return !toRemove[id]
-			}
-		}
-		return true
-	})
-
-	if len(filtered) == 0 {
-		return fmt.Errorf("cannot remove all schemas")
+	filtered, err := removeItemsByID(schemas, u.SchemaIDs, "schema-id", currentSchemaID, "current schema")
+	if err != nil {
+		return err
 	}
 
 	p.metadata["schemas"] = filtered

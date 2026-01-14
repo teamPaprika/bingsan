@@ -75,7 +75,8 @@ class TestTableCRUD:
         )
 
         assert table is not None
-        assert table.name() == table_name
+        # table.name() returns the full identifier tuple (namespace, table_name)
+        assert table.name()[-1] == table_name
 
         # Cleanup
         rest_catalog.drop_table(identifier)

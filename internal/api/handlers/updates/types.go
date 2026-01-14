@@ -118,7 +118,7 @@ type AddSnapshot struct {
 // SetSnapshotRef creates or updates a snapshot reference (branch or tag).
 type SetSnapshotRef struct {
 	RefName            string `json:"ref-name"`
-	Type               string `json:"type"`        // "branch" or "tag"
+	Type               string `json:"type"` // "branch" or "tag"
 	SnapshotID         int64  `json:"snapshot-id"`
 	MaxRefAgeMs        *int64 `json:"max-ref-age-ms,omitempty"`
 	MaxSnapshotAgeMs   *int64 `json:"max-snapshot-age-ms,omitempty"`

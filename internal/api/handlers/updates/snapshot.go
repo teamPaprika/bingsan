@@ -2,6 +2,12 @@ package updates
 
 import "fmt"
 
+// Ref type constants.
+const (
+	refTypeBranch = "branch"
+	refTypeTag    = "tag"
+)
+
 // ============================================================================
 // Snapshot Management - Critical for Data Operations
 // ============================================================================
@@ -64,8 +70,8 @@ func (p *Processor) applySetSnapshotRef(u *SetSnapshotRef) error {
 		return fmt.Errorf("ref-name is required")
 	}
 
-	if u.Type != "branch" && u.Type != "tag" {
-		return fmt.Errorf("type must be 'branch' or 'tag', got '%s'", u.Type)
+	if u.Type != refTypeBranch && u.Type != refTypeTag {
+		return fmt.Errorf("type must be '%s' or '%s', got '%s'", refTypeBranch, refTypeTag, u.Type)
 	}
 
 	// Validate that the referenced snapshot exists (unless it's -1 for removal)
@@ -102,7 +108,7 @@ func (p *Processor) applySetSnapshotRef(u *SetSnapshotRef) error {
 	refs[u.RefName] = ref
 
 	// If setting the "main" branch, also update current-snapshot-id
-	if u.RefName == "main" && u.Type == "branch" {
+	if u.RefName == "main" && u.Type == refTypeBranch {
 		p.metadata["current-snapshot-id"] = u.SnapshotID
 	}
 

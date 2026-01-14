@@ -1,6 +1,9 @@
 package updates
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // deepCopyMap creates a deep copy of a map using JSON round-trip.
 // This ensures nested structures are properly copied.
@@ -12,11 +15,11 @@ func deepCopyMap(m map[string]any) map[string]any {
 	data, err := json.Marshal(m)
 	if err != nil {
 		// Fallback to shallow copy on marshal error (shouldn't happen)
-		copy := make(map[string]any, len(m))
+		result := make(map[string]any, len(m))
 		for k, v := range m {
-			copy[k] = v
+			result[k] = v
 		}
-		return copy
+		return result
 	}
 
 	var result map[string]any
@@ -126,17 +129,6 @@ func ensureMap(m map[string]any, key string) map[string]any {
 	return nested
 }
 
-// findInSlice finds the index of an element matching a predicate.
-// Returns -1 if not found.
-func findInSlice(slice []any, predicate func(any) bool) int {
-	for i, item := range slice {
-		if predicate(item) {
-			return i
-		}
-	}
-	return -1
-}
-
 // filterSlice returns a new slice with elements matching the predicate.
 func filterSlice(slice []any, predicate func(any) bool) []any {
 	result := make([]any, 0, len(slice))
@@ -148,28 +140,56 @@ func filterSlice(slice []any, predicate func(any) bool) []any {
 	return result
 }
 
-// maxInt64InSlice finds the maximum int64 value for a key in a slice of maps.
-func maxInt64InSlice(slice []any, key string) int64 {
-	var max int64
-	for _, item := range slice {
-		if m, ok := item.(map[string]any); ok {
-			if v, ok := getInt64(m, key); ok && v > max {
-				max = v
-			}
-		}
-	}
-	return max
-}
-
 // maxIntInSlice finds the maximum int value for a key in a slice of maps.
 func maxIntInSlice(slice []any, key string) int {
-	var max int
+	var maxVal int
 	for _, item := range slice {
 		if m, ok := item.(map[string]any); ok {
-			if v, ok := getInt(m, key); ok && v > max {
-				max = v
+			if v, ok := getInt(m, key); ok && v > maxVal {
+				maxVal = v
 			}
 		}
 	}
-	return max
+	return maxVal
+}
+
+// removeItemsByID is a generic helper for removing items from a slice by their ID field.
+// It returns the filtered slice and an error if validation fails.
+// Parameters:
+//   - items: the slice of map[string]any items
+//   - idsToRemove: slice of IDs to remove
+//   - idKey: the key name for the ID field (e.g., "schema-id", "spec-id")
+//   - protectedID: the ID that cannot be removed (e.g., current schema, default spec)
+//   - itemType: human-readable name for error messages (e.g., "schema", "partition spec")
+func removeItemsByID(items []any, idsToRemove []int, idKey string, protectedID int, itemType string) ([]any, error) {
+	if len(idsToRemove) == 0 || len(items) == 0 {
+		return items, nil
+	}
+
+	// Build set of IDs to remove
+	toRemove := make(map[int]bool, len(idsToRemove))
+	for _, id := range idsToRemove {
+		toRemove[id] = true
+	}
+
+	// Check we're not removing the protected item
+	if toRemove[protectedID] {
+		return nil, fmt.Errorf("cannot remove %s %d", itemType, protectedID)
+	}
+
+	// Filter items
+	filtered := filterSlice(items, func(item any) bool {
+		if m, ok := item.(map[string]any); ok {
+			if id, ok := getInt(m, idKey); ok {
+				return !toRemove[id]
+			}
+		}
+		return true
+	})
+
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("cannot remove all %ss", itemType)
+	}
+
+	return filtered, nil
 }

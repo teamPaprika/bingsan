@@ -7,15 +7,9 @@ import (
 
 // processingOrder defines the dependency-correct order for applying updates.
 // Updates are applied in this sequence to ensure referential integrity:
-// 1. Core table attributes (UUID, format, location)
-// 2. Schema additions (before schema references)
-// 3. Partition spec additions (before partition references)
-// 4. Sort order additions (before sort order references)
-// 5. Snapshot additions (before snapshot references)
-// 6. Snapshot references (depends on snapshots existing)
-// 7. Statistics (references snapshots)
-// 8. Properties
-// 9. Removals (in reverse dependency order)
+// core table attributes, schema additions, partition spec additions,
+// sort order additions, snapshot additions, snapshot references,
+// statistics, properties, and removals (in reverse dependency order).
 var processingOrder = []string{
 	// Core operations
 	"assign-uuid",
@@ -137,6 +131,8 @@ func (p *Processor) parseUpdates(rawUpdates []RawUpdate) (map[string][]any, erro
 }
 
 // parseUpdate parses a single raw update into its typed structure.
+//
+//nolint:gocyclo // Switch statement is inherently complex but clear
 func parseUpdate(raw RawUpdate) (any, error) {
 	var target any
 
@@ -213,6 +209,9 @@ func parseUpdate(raw RawUpdate) (any, error) {
 }
 
 // applyUpdate dispatches to the appropriate handler based on action type.
+// Type assertions are safe here because parseUpdate guarantees correct types.
+//
+//nolint:gocyclo,errcheck // Switch is inherently complex; type assertions safe per parseUpdate
 func (p *Processor) applyUpdate(action string, data any) error {
 	switch action {
 	// Core operations
