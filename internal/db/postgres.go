@@ -12,7 +12,7 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/kimuyb/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/config"
 )
 
 //go:embed migrations/*.sql

@@ -11,9 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/kimuyb/bingsan/internal/config"
-	"github.com/kimuyb/bingsan/internal/db"
-	"github.com/kimuyb/bingsan/internal/pool"
+	"github.com/teamPaprika/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/pool"
 )
 
 // ViewIdentifier identifies a view by namespace and name.

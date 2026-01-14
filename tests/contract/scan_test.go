@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3filter"
-	"github.com/kimuyb/bingsan/internal/api"
-	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/api"
+	"github.com/teamPaprika/bingsan/internal/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/db"
 )
 
 // AuditLogger logs audit events to the database.

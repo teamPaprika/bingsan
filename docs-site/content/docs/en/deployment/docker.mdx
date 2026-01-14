@@ -1,0 +1,155 @@
+---
+title: Docker
+description: Deploy Bingsan using Docker or Docker Compose
+---
+
+# Docker Deployment
+
+Deploy Bingsan using Docker or Docker Compose.
+
+## Docker Compose (Development)
+
+The fastest way to get started for development and testing.
+
+### Prerequisites
+
+- Docker Engine 20.10+
+- Docker Compose v2.0+
+
+### Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/teamPaprika/bingsan.git
+cd bingsan
+
+# Copy configuration
+cp config.example.yaml config.yaml
+
+# Start services
+docker compose -f deployments/docker/docker-compose.yml up -d
+```
+
+### docker-compose.yml
+
+```yaml
+version: '3.8'
+
+services:
+  bingsan:
+    image: ghcr.io/kimuyb/bingsan:latest
+    ports:
+      - "8181:8181"
+    environment:
+      - ICEBERG_SERVER_HOST=0.0.0.0
+      - ICEBERG_SERVER_PORT=8181
+      - ICEBERG_DATABASE_HOST=postgres
+      - ICEBERG_DATABASE_PORT=5432
+      - ICEBERG_DATABASE_USER=iceberg
+      - ICEBERG_DATABASE_PASSWORD=iceberg
+      - ICEBERG_DATABASE_DATABASE=iceberg_catalog
+      - ICEBERG_STORAGE_TYPE=local
+      - ICEBERG_STORAGE_WAREHOUSE=file:///data/warehouse
+    volumes:
+      - warehouse-data:/data/warehouse
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=iceberg
+      - POSTGRES_PASSWORD=iceberg
+      - POSTGRES_DB=iceberg_catalog
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iceberg -d iceberg_catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  warehouse-data:
+  postgres-data:
+```
+
+### Managing the Stack
+
+```bash
+# View logs
+docker compose -f deployments/docker/docker-compose.yml logs -f
+
+# Stop services
+docker compose -f deployments/docker/docker-compose.yml down
+
+# Stop and remove volumes
+docker compose -f deployments/docker/docker-compose.yml down -v
+```
+
+## Docker Compose with S3 (MinIO)
+
+For testing with S3-compatible storage, add MinIO to your compose file with the appropriate environment variables for S3 storage configuration.
+
+## Standalone Docker
+
+Run Bingsan as a standalone container (requires external PostgreSQL).
+
+```bash
+# Pull the image
+docker pull ghcr.io/kimuyb/bingsan:latest
+
+# Run with environment variables
+docker run -d \
+  --name bingsan \
+  -p 8181:8181 \
+  -e ICEBERG_DATABASE_HOST=your-postgres-host \
+  -e ICEBERG_DATABASE_PORT=5432 \
+  -e ICEBERG_DATABASE_USER=iceberg \
+  -e ICEBERG_DATABASE_PASSWORD=your-password \
+  -e ICEBERG_DATABASE_DATABASE=iceberg_catalog \
+  -e ICEBERG_STORAGE_TYPE=s3 \
+  -e ICEBERG_STORAGE_WAREHOUSE=s3://your-bucket/warehouse \
+  -e ICEBERG_STORAGE_S3_REGION=us-east-1 \
+  ghcr.io/kimuyb/bingsan:latest
+```
+
+## Production Recommendations
+
+1. **Use specific image tags**: Don't use `latest` in production
+2. **Resource limits**: Set memory and CPU limits
+3. **Health checks**: Configure container health checks
+4. **Logging**: Use json-file or external logging driver
+5. **Secrets**: Use Docker secrets or external secret management
+
+## Troubleshooting
+
+### Container Won't Start
+
+```bash
+# Check logs
+docker logs bingsan
+
+# Check if port is in use
+lsof -i :8181
+```
+
+### Database Connection Failed
+
+```bash
+# Test PostgreSQL connectivity
+docker exec bingsan nc -zv postgres 5432
+
+# Check environment variables
+docker exec bingsan env | grep ICEBERG_DATABASE
+```
+
+### Health Check Failing
+
+```bash
+# Test health endpoint
+docker exec bingsan wget -q -O- http://localhost:8181/health
+```

@@ -1,0 +1,155 @@
+---
+title: Code Style
+description: Code style guidelines and linting
+---
+
+# Code Style
+
+Bingsan follows Go best practices with additional project-specific conventions.
+
+## Formatting
+
+The project uses **gofumpt** (a stricter gofmt):
+
+```bash
+# Install
+go install mvdan.cc/gofumpt@latest
+
+# Format
+gofumpt -w .
+```
+
+## Linting
+
+golangci-lint is configured in `.golangci.yml`:
+
+```bash
+# Run linter
+make lint
+
+# Auto-fix issues
+make lint-fix
+```
+
+### Enabled Linters
+
+Key linters include:
+- `gofumpt` - Stricter formatting
+- `gosec` - Security checks
+- `gocritic` - Code quality
+- `revive` - Style checks
+- `errcheck` - Error handling
+- `staticcheck` - Static analysis
+
+## Import Organization
+
+Imports should be grouped in this order:
+
+```go
+import (
+    // Standard library
+    "context"
+    "fmt"
+
+    // Third-party packages
+    "github.com/gofiber/fiber/v2"
+    "github.com/jackc/pgx/v5"
+
+    // Local packages
+    "github.com/teamPaprika/bingsan/internal/api"
+    "github.com/teamPaprika/bingsan/internal/db"
+)
+```
+
+## Naming Conventions
+
+### Files
+
+- Lowercase with underscores: `table_handler.go`
+- Test files: `table_handler_test.go`
+
+### Functions
+
+- Exported: `PascalCase` - `CreateTable`
+- Unexported: `camelCase` - `validateSchema`
+
+### Variables
+
+- Short-lived: `t`, `ctx`, `err`
+- Descriptive for complex types: `tableMetadata`, `namespaceList`
+
+## Error Handling
+
+Always handle errors explicitly:
+
+```go
+// Good
+result, err := doSomething()
+if err != nil {
+    return fmt.Errorf("failed to do something: %w", err)
+}
+
+// Bad - ignoring error
+result, _ := doSomething()
+```
+
+## JSON Serialization
+
+Use `goccy/go-json` instead of `encoding/json`:
+
+```go
+import "github.com/goccy/go-json"
+
+// Marshal
+data, err := json.Marshal(obj)
+
+// Unmarshal
+err := json.Unmarshal(data, &obj)
+```
+
+## Context Usage
+
+Always accept context as first parameter:
+
+```go
+func (h *Handler) GetTable(ctx context.Context, name string) (*Table, error) {
+    // Use ctx for cancellation, deadlines, and tracing
+}
+```
+
+## Complexity Limits
+
+- Cyclomatic complexity: max 15
+- Function length: aim for under 50 lines
+- File length: aim for under 500 lines
+
+## Documentation
+
+### Package Comments
+
+```go
+// Package handlers provides HTTP handlers for the Iceberg REST API.
+// It implements the Apache Iceberg REST Catalog specification.
+package handlers
+```
+
+### Function Comments
+
+```go
+// CreateTable creates a new table in the specified namespace.
+// It validates the table schema and metadata before persisting.
+// Returns the created table metadata or an error.
+func (h *Handler) CreateTable(ctx context.Context, req CreateTableRequest) (*Table, error) {
+```
+
+## Commit Messages
+
+Follow conventional commits:
+
+```text
+feat: add table compaction endpoint
+fix: correct metadata serialization for partitions
+docs: update API reference for views
+test: add integration tests for namespace operations
+refactor: extract validation logic to separate package
+```

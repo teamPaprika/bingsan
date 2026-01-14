@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kimuyb/bingsan/internal/api"
+	"github.com/teamPaprika/bingsan/internal/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

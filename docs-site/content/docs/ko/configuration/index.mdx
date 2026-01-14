@@ -1,0 +1,58 @@
+---
+title: 설정
+description: Bingsan의 완전한 설정 가이드
+---
+
+# 설정
+
+Bingsan은 YAML 파일 또는 환경 변수를 통해 설정됩니다.
+
+## 설정 소스
+
+설정은 다음 순서로 로드됩니다 (나중 소스가 이전 소스를 덮어씀):
+
+1. 기본값
+2. `config.yaml` 파일
+3. 환경 변수 (`ICEBERG_` 접두사)
+
+## 빠른 참조
+
+```yaml
+server:
+  host: 0.0.0.0
+  port: 8181
+  debug: false
+
+database:
+  host: localhost
+  port: 5432
+  user: iceberg
+  password: iceberg
+  database: iceberg_catalog
+
+storage:
+  type: s3
+  warehouse: s3://bucket/warehouse
+
+auth:
+  enabled: false
+  token_expiry: 1h
+```
+
+## 설정 섹션
+
+- [서버](/docs/configuration/server) - HTTP 서버 설정
+- [데이터베이스](/docs/configuration/database) - PostgreSQL 연결
+- [스토리지](/docs/configuration/storage) - S3/GCS/로컬 스토리지 백엔드
+- [인증](/docs/configuration/auth) - OAuth2 및 API 키 인증
+
+## 환경 변수
+
+모든 설정 옵션은 `ICEBERG_` 접두사와 중첩 키에 밑줄을 사용하여 환경 변수로 설정할 수 있습니다:
+
+| 설정 경로 | 환경 변수 |
+|-------------|---------------------|
+| `server.port` | `ICEBERG_SERVER_PORT` |
+| `database.host` | `ICEBERG_DATABASE_HOST` |
+| `storage.s3.region` | `ICEBERG_STORAGE_S3_REGION` |
+| `auth.enabled` | `ICEBERG_AUTH_ENABLED` |

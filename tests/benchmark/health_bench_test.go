@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kimuyb/bingsan/internal/api"
-	"github.com/kimuyb/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/api"
+	"github.com/teamPaprika/bingsan/internal/config"
 )
 
 // BenchmarkHealthEndpoint measures the performance of the /health endpoint.

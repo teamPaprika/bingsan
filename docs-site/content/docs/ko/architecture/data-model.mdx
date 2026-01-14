@@ -1,0 +1,147 @@
+---
+title: 데이터 모델
+description: Bingsan의 데이터베이스 스키마 및 메타데이터 저장
+---
+
+# 데이터 모델
+
+Bingsan은 모든 카탈로그 메타데이터를 PostgreSQL에 저장합니다.
+
+## 개요
+
+```
+┌─────────────────┐     ┌─────────────────┐
+│   namespaces    │     │     tables      │
+├─────────────────┤     ├─────────────────┤
+│ id              │────▶│ namespace_id    │
+│ name            │     │ name            │
+│ properties      │     │ metadata_loc    │
+└─────────────────┘     │ metadata        │
+                        └─────────────────┘
+                                │
+                                ▼
+┌─────────────────┐     ┌─────────────────┐
+│     views       │     │   scan_plans    │
+├─────────────────┤     ├─────────────────┤
+│ namespace_id    │     │ table_id        │
+│ name            │     │ plan_id         │
+│ metadata_loc    │     │ status          │
+│ metadata        │     │ tasks           │
+└─────────────────┘     └─────────────────┘
+```
+
+## 테이블
+
+### namespaces
+
+네임스페이스 메타데이터를 저장합니다.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `id` | BIGSERIAL | 기본 키 |
+| `name` | TEXT[] | 배열 형태의 네임스페이스 이름 |
+| `properties` | JSONB | 네임스페이스 속성 |
+| `created_at` | TIMESTAMPTZ | 생성 타임스탬프 |
+| `updated_at` | TIMESTAMPTZ | 마지막 업데이트 타임스탬프 |
+
+### tables
+
+Iceberg 테이블 메타데이터를 저장합니다.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `id` | BIGSERIAL | 기본 키 |
+| `namespace_id` | BIGINT | namespaces 외래 키 |
+| `name` | TEXT | 테이블 이름 |
+| `table_uuid` | UUID | Iceberg 테이블 UUID |
+| `metadata_location` | TEXT | 현재 메타데이터 파일 경로 |
+| `metadata` | JSONB | 캐시된 테이블 메타데이터 (선택) |
+
+### views
+
+테이블과 유사한 구조로 Iceberg 뷰 메타데이터를 저장합니다.
+
+### scan_plans
+
+서버 측 플래닝을 위한 스캔 플랜 상태를 저장합니다.
+
+## 메타데이터 저장 전략
+
+### 데이터베이스 vs 오브젝트 스토리지
+
+Bingsan은 하이브리드 접근 방식을 사용합니다:
+
+**PostgreSQL 저장:**
+- 네임스페이스 메타데이터
+- 테이블/뷰 레지스트리 (이름, UUID, 위치)
+- 스캔 플랜 상태
+- 캐시된 메타데이터 (선택)
+
+**오브젝트 스토리지 (S3/GCS) 저장:**
+- 전체 Iceberg 메타데이터 JSON 파일
+- 매니페스트 리스트
+- 매니페스트
+- 데이터 파일
+
+## 잠금 모델
+
+### Advisory 락
+
+PostgreSQL advisory 락으로 일관성을 보장합니다:
+
+```sql
+-- 네임스페이스 레벨 락
+SELECT pg_advisory_lock(hashtext('ns:' || $1));
+
+-- 테이블 레벨 락
+SELECT pg_advisory_xact_lock($1);
+```
+
+락은 최소 필요 시간 동안만 유지됩니다.
+
+## 마이그레이션
+
+Bingsan은 스키마 마이그레이션에 [golang-migrate](https://github.com/golang-migrate/migrate)를 사용합니다.
+
+### 자동 마이그레이션
+
+시작 시 마이그레이션이 자동으로 실행됩니다.
+
+### 수동 마이그레이션
+
+```bash
+# 현재 버전 확인
+migrate -database "postgres://..." -path migrations version
+
+# 마이그레이션 적용
+migrate -database "postgres://..." -path migrations up
+
+# 마이그레이션 롤백
+migrate -database "postgres://..." -path migrations down 1
+```
+
+## 인덱스
+
+일반적인 쿼리 패턴에 최적화된 인덱스:
+
+| 쿼리 | 사용 인덱스 |
+|------|------------|
+| 네임스페이스 목록 | `idx_namespaces_name` (GIN) |
+| 이름으로 네임스페이스 조회 | `namespaces_name_key` (UNIQUE) |
+| 네임스페이스 내 테이블 목록 | `idx_tables_namespace` |
+| 이름으로 테이블 조회 | `tables_namespace_id_name_key` (UNIQUE) |
+| UUID로 테이블 찾기 | `idx_tables_uuid` |
+
+## 백업 및 복구
+
+### PostgreSQL 백업
+
+```bash
+# 전체 백업
+pg_dump -h localhost -U iceberg iceberg_catalog > backup.sql
+
+# 복구
+psql -h localhost -U iceberg iceberg_catalog < backup.sql
+```
+
+전체 Iceberg 메타데이터가 오브젝트 스토리지에 있으므로, 필요 시 메타데이터 파일에서 데이터베이스를 재구축할 수 있습니다.

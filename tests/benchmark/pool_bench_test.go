@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kimuyb/bingsan/internal/pool"
+	"github.com/teamPaprika/bingsan/internal/pool"
 )
 
 // =============================================================================

@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/db"
 )
 
 // ScanPlanRequest is the request for submitting a scan plan.

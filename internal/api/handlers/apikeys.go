@@ -10,8 +10,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"github.com/kimuyb/bingsan/internal/api/middleware"
-	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/api/middleware"
+	"github.com/teamPaprika/bingsan/internal/db"
 )
 
 // APIKeyResponse represents an API key in responses.

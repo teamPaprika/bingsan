@@ -14,7 +14,7 @@ import (
 	"google.golang.org/api/iamcredentials/v1"
 	"google.golang.org/api/option"
 
-	"github.com/kimuyb/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/config"
 )
 
 // LoadCredentialsResponse is the response for loading vended credentials.

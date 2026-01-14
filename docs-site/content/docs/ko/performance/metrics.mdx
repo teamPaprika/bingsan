@@ -1,0 +1,178 @@
+---
+title: 메트릭
+description: Bingsan 성능 모니터링을 위한 Prometheus 메트릭
+---
+
+# 성능 메트릭
+
+Bingsan은 `/metrics` 엔드포인트에서 Prometheus를 통해 성능 메트릭을 노출합니다.
+
+## 풀 메트릭
+
+오브젝트 풀 활용 메트릭은 메모리 효율성 모니터링에 도움이 됩니다.
+
+### bingsan_pool_gets_total
+
+**유형**: Counter
+**레이블**: `pool`
+
+풀의 총 `Get()` 작업 수.
+
+```text
+# 풀별 가져오기 비율
+rate(bingsan_pool_gets_total[5m])
+
+# 풀 유형별 총 가져오기
+sum by (pool) (bingsan_pool_gets_total)
+```
+
+### bingsan_pool_returns_total
+
+**유형**: Counter
+**레이블**: `pool`
+
+항목을 풀로 반환하는 성공적인 `Put()` 작업의 총 수.
+
+```text
+# 풀 효율성 (반환/가져오기)
+rate(bingsan_pool_returns_total{pool="buffer"}[5m])
+/ rate(bingsan_pool_gets_total{pool="buffer"}[5m])
+```
+
+### bingsan_pool_discards_total
+
+**유형**: Counter
+**레이블**: `pool`
+
+폐기된 항목(과대 또는 유효하지 않음)의 총 수.
+
+```text
+# 폐기 비율
+rate(bingsan_pool_discards_total{pool="buffer"}[5m])
+/ rate(bingsan_pool_gets_total{pool="buffer"}[5m]) * 100
+```
+
+### bingsan_pool_misses_total
+
+**유형**: Counter
+**레이블**: `pool`
+
+새 할당이 필요한 풀 미스의 총 수.
+
+```text
+# 히트율 (추정)
+1 - (rate(bingsan_pool_misses_total[5m]) / rate(bingsan_pool_gets_total[5m]))
+```
+
+## 풀 레이블
+
+| 레이블 | 값 | 설명 |
+|--------|-----|------|
+| `pool` | `buffer`, `bytes` | 풀 유형 식별자 |
+
+## 알림 규칙
+
+### 낮은 풀 히트율
+
+```yaml
+- alert: LowPoolHitRate
+  expr: |
+    (rate(bingsan_pool_returns_total{pool="buffer"}[5m])
+     / rate(bingsan_pool_gets_total{pool="buffer"}[5m])) < 0.8
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "풀 히트율 80% 미만"
+```
+
+### 높은 폐기율
+
+```yaml
+- alert: HighPoolDiscardRate
+  expr: rate(bingsan_pool_discards_total{pool="buffer"}[5m]) > 10
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "높은 풀 폐기율"
+```
+
+## 레코딩 규칙
+
+비싼 쿼리 사전 계산:
+
+```yaml
+groups:
+  - name: bingsan_pool_recording
+    interval: 30s
+    rules:
+      - record: bingsan:pool_hit_rate:5m
+        expr: |
+          rate(bingsan_pool_returns_total[5m])
+          / rate(bingsan_pool_gets_total[5m])
+
+      - record: bingsan:pool_discard_rate:5m
+        expr: rate(bingsan_pool_discards_total[5m])
+```
+
+## 메트릭 해석
+
+### 건강한 풀
+
+```
+gets_total:    1,000,000
+returns_total: 1,000,000
+discards_total:        50
+misses_total:         100
+
+활용률: 100% (반환 = 가져오기)
+폐기율: 0.005%
+미스율: 0.01%
+```
+
+### 누수가 있는 풀
+
+```
+gets_total:    1,000,000
+returns_total:   800,000  ← 200,000 누락!
+discards_total:       100
+misses_total:     200,100  ← 높은 미스
+
+활용률: 80%
+미스율: 20%
+```
+
+**조치**: 누락된 `defer pool.Put()` 호출 확인.
+
+### 큰 응답이 있는 풀
+
+```
+gets_total:    1,000,000
+returns_total:   700,000
+discards_total:  300,000  ← 높은 폐기!
+misses_total:         50
+
+활용률: 70%
+폐기율: 30%
+```
+
+**조치**: 스키마가 크면 `MaxBufferSize` 늘리기 고려.
+
+## 헬스 체크 엔드포인트
+
+### /health
+
+기본 헬스 체크 (정상이면 200 반환):
+
+```bash
+curl http://localhost:8181/health
+```
+
+### /metrics
+
+Prometheus 메트릭 엔드포인트:
+
+```bash
+curl http://localhost:8181/metrics | grep bingsan_pool
+```

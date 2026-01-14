@@ -1,0 +1,39 @@
+---
+title: Trino
+description: Connect Trino to Bingsan REST Catalog
+---
+
+# Trino Integration
+
+Connect Trino to Bingsan for distributed SQL queries on Iceberg tables.
+
+## Connector Configuration
+
+Create `etc/catalog/iceberg.properties`:
+
+```properties
+connector.name=iceberg
+iceberg.catalog.type=rest
+iceberg.rest-catalog.uri=http://bingsan:8181
+```
+
+## With Authentication
+
+```properties
+connector.name=iceberg
+iceberg.catalog.type=rest
+iceberg.rest-catalog.uri=http://bingsan:8181
+iceberg.rest-catalog.security=OAUTH2
+iceberg.rest-catalog.oauth2.client-id=client_id
+iceberg.rest-catalog.oauth2.client-secret=client_secret
+```
+
+## Usage
+
+```sql
+-- List schemas
+SHOW SCHEMAS FROM iceberg;
+
+-- Query table
+SELECT * FROM iceberg.analytics.user_events LIMIT 10;
+```

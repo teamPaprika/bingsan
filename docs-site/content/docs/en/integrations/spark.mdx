@@ -1,0 +1,45 @@
+---
+title: Apache Spark
+description: Connect Apache Spark to Bingsan REST Catalog
+---
+
+# Apache Spark Integration
+
+Connect Apache Spark to Bingsan for reading and writing Iceberg tables.
+
+## Configuration
+
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .appName("Bingsan Example") \
+    .config("spark.sql.catalog.bingsan", "org.apache.iceberg.spark.SparkCatalog") \
+    .config("spark.sql.catalog.bingsan.type", "rest") \
+    .config("spark.sql.catalog.bingsan.uri", "http://localhost:8181") \
+    .getOrCreate()
+```
+
+## With Authentication
+
+```python
+spark = SparkSession.builder \
+    .config("spark.sql.catalog.bingsan.credential", "client_id:client_secret") \
+    .getOrCreate()
+```
+
+## Usage
+
+```sql
+-- List tables
+SHOW TABLES IN bingsan.analytics;
+
+-- Query table
+SELECT * FROM bingsan.analytics.user_events LIMIT 10;
+
+-- Create table
+CREATE TABLE bingsan.analytics.events (
+    id BIGINT,
+    data STRING
+) USING iceberg;
+```

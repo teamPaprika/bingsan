@@ -1,4 +1,4 @@
-module github.com/kimuyb/bingsan
+module github.com/teamPaprika/bingsan
 
 go 1.24.0
 

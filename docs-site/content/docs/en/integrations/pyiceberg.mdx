@@ -1,0 +1,51 @@
+---
+title: PyIceberg
+description: Use PyIceberg Python library with Bingsan
+---
+
+# PyIceberg Integration
+
+Use PyIceberg to interact with Bingsan from Python.
+
+## Installation
+
+```bash
+pip install pyiceberg
+```
+
+## Connection
+
+```python
+from pyiceberg.catalog import load_catalog
+
+catalog = load_catalog(
+    "rest",
+    uri="http://localhost:8181"
+)
+```
+
+## With Authentication
+
+```python
+catalog = load_catalog(
+    "rest",
+    uri="http://localhost:8181",
+    credential="client_id:client_secret"
+)
+```
+
+## Usage
+
+```python
+# List namespaces
+catalog.list_namespaces()
+
+# List tables
+catalog.list_tables("analytics")
+
+# Load table
+table = catalog.load_table("analytics.user_events")
+
+# Read data
+df = table.scan().to_pandas()
+```

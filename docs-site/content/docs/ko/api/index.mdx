@@ -1,0 +1,82 @@
+---
+title: API 레퍼런스
+description: Apache Iceberg REST Catalog 사양을 준수하는 Bingsan의 완전한 REST API 문서
+---
+
+# API 레퍼런스
+
+Apache Iceberg REST Catalog 사양을 준수하는 Bingsan의 완전한 REST API 문서입니다.
+
+## 기본 URL
+
+```
+http://localhost:8181/v1
+```
+
+## 인증
+
+인증이 활성화되면 요청에 Bearer 토큰을 포함합니다:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8181/v1/namespaces
+```
+
+자세한 내용은 [인증 설정](/docs/configuration/auth)을 참조하세요.
+
+## Content Type
+
+본문이 있는 모든 요청에는 다음을 사용해야 합니다:
+
+```
+Content-Type: application/json
+```
+
+## API 섹션
+
+### 핵심 작업
+
+- [네임스페이스](/docs/api/namespaces) - 네임스페이스 CRUD 작업
+- [테이블](/docs/api/tables) - 테이블 관리 및 커밋
+- [뷰](/docs/api/views) - 뷰 관리
+
+## 오류 응답
+
+모든 오류 응답은 다음 형식을 따릅니다:
+
+```json
+{
+  "error": {
+    "message": "오류 설명",
+    "type": "ErrorType",
+    "code": 400
+  }
+}
+```
+
+### 일반적인 오류 유형
+
+| 코드 | 유형 | 설명 |
+|------|------|-------------|
+| 400 | `BadRequestException` | 잘못된 요청 매개변수 |
+| 401 | `UnauthorizedException` | 인증 누락 또는 무효 |
+| 403 | `ForbiddenException` | 권한 거부 |
+| 404 | `NoSuchNamespaceException` | 네임스페이스를 찾을 수 없음 |
+| 404 | `NoSuchTableException` | 테이블을 찾을 수 없음 |
+| 404 | `NoSuchViewException` | 뷰를 찾을 수 없음 |
+| 409 | `AlreadyExistsException` | 리소스가 이미 존재함 |
+| 409 | `CommitFailedException` | 낙관적 잠금 실패 |
+| 500 | `ServerError` | 내부 서버 오류 |
+
+## 카탈로그 프리픽스
+
+Bingsan은 멀티 카탈로그 배포를 위한 프리픽스 API 경로를 지원합니다:
+
+```
+/v1/{prefix}/namespaces
+/v1/{prefix}/namespaces/{namespace}/tables
+```
+
+예시:
+```bash
+curl http://localhost:8181/v1/my-catalog/namespaces
+```

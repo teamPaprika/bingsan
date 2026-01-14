@@ -1,0 +1,155 @@
+---
+title: 코드 스타일
+description: 코드 스타일 가이드라인 및 린팅
+---
+
+# 코드 스타일
+
+Bingsan은 Go 모범 사례와 프로젝트별 추가 규칙을 따릅니다.
+
+## 포매팅
+
+프로젝트는 **gofumpt** (더 엄격한 gofmt)를 사용합니다:
+
+```bash
+# 설치
+go install mvdan.cc/gofumpt@latest
+
+# 포맷
+gofumpt -w .
+```
+
+## 린팅
+
+golangci-lint는 `.golangci.yml`에 구성되어 있습니다:
+
+```bash
+# 린터 실행
+make lint
+
+# 자동 수정
+make lint-fix
+```
+
+### 활성화된 린터
+
+주요 린터:
+- `gofumpt` - 더 엄격한 포매팅
+- `gosec` - 보안 검사
+- `gocritic` - 코드 품질
+- `revive` - 스타일 검사
+- `errcheck` - 에러 처리
+- `staticcheck` - 정적 분석
+
+## Import 구성
+
+Import는 다음 순서로 그룹화해야 합니다:
+
+```go
+import (
+    // 표준 라이브러리
+    "context"
+    "fmt"
+
+    // 서드파티 패키지
+    "github.com/gofiber/fiber/v2"
+    "github.com/jackc/pgx/v5"
+
+    // 로컬 패키지
+    "github.com/teamPaprika/bingsan/internal/api"
+    "github.com/teamPaprika/bingsan/internal/db"
+)
+```
+
+## 네이밍 규칙
+
+### 파일
+
+- 소문자와 언더스코어: `table_handler.go`
+- 테스트 파일: `table_handler_test.go`
+
+### 함수
+
+- 내보내는 함수: `PascalCase` - `CreateTable`
+- 내보내지 않는 함수: `camelCase` - `validateSchema`
+
+### 변수
+
+- 짧은 수명: `t`, `ctx`, `err`
+- 복잡한 타입은 설명적으로: `tableMetadata`, `namespaceList`
+
+## 에러 처리
+
+항상 에러를 명시적으로 처리하세요:
+
+```go
+// 좋음
+result, err := doSomething()
+if err != nil {
+    return fmt.Errorf("failed to do something: %w", err)
+}
+
+// 나쁨 - 에러 무시
+result, _ := doSomething()
+```
+
+## JSON 직렬화
+
+`encoding/json` 대신 `goccy/go-json`을 사용하세요:
+
+```go
+import "github.com/goccy/go-json"
+
+// Marshal
+data, err := json.Marshal(obj)
+
+// Unmarshal
+err := json.Unmarshal(data, &obj)
+```
+
+## Context 사용
+
+항상 context를 첫 번째 매개변수로 받으세요:
+
+```go
+func (h *Handler) GetTable(ctx context.Context, name string) (*Table, error) {
+    // ctx를 취소, 데드라인, 트레이싱에 사용
+}
+```
+
+## 복잡도 제한
+
+- 순환 복잡도: 최대 15
+- 함수 길이: 50줄 이하 권장
+- 파일 길이: 500줄 이하 권장
+
+## 문서화
+
+### 패키지 주석
+
+```go
+// Package handlers는 Iceberg REST API용 HTTP 핸들러를 제공합니다.
+// Apache Iceberg REST Catalog 스펙을 구현합니다.
+package handlers
+```
+
+### 함수 주석
+
+```go
+// CreateTable은 지정된 네임스페이스에 새 테이블을 생성합니다.
+// 저장하기 전에 테이블 스키마와 메타데이터를 검증합니다.
+// 생성된 테이블 메타데이터 또는 에러를 반환합니다.
+func (h *Handler) CreateTable(ctx context.Context, req CreateTableRequest) (*Table, error) {
+```
+
+## 커밋 메시지
+
+Conventional Commits를 따르세요:
+
+```text
+feat: add table compaction endpoint
+fix: correct metadata serialization for partitions
+docs: update API reference for views
+test: add integration tests for namespace operations
+refactor: extract validation logic to separate package
+```

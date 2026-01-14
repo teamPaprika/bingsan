@@ -1,0 +1,175 @@
+---
+title: 확장성
+description: Bingsan의 확장 전략 및 용량 계획
+---
+
+# 확장성
+
+Bingsan은 일관성을 유지하면서 수평 확장이 가능하도록 설계되었습니다.
+
+## 수평 확장
+
+### 상태 비저장 아키텍처
+
+각 Bingsan 인스턴스는 상태를 저장하지 않습니다:
+
+- 모든 상태는 PostgreSQL에 저장
+- 노드 간 통신 불필요
+- 어떤 노드든 모든 요청 처리 가능
+- 간단한 로드 밸런싱 (라운드 로빈으로 충분)
+
+```
+┌──────────────────────────────────────────┐
+│              로드 밸런서                  │
+└────────────────────┬─────────────────────┘
+     ┌───────────────┼───────────────┐
+     ▼               ▼               ▼
+┌─────────┐   ┌─────────┐   ┌─────────┐
+│ 노드 1  │   │ 노드 2  │   │ 노드 N  │
+└────┬────┘   └────┬────┘   └────┬────┘
+     └─────────────┼─────────────┘
+                   ▼
+          ┌───────────────┐
+          │  PostgreSQL   │
+          └───────────────┘
+```
+
+### Kubernetes 배포
+
+Kubernetes HPA로 확장:
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bingsan
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bingsan
+  minReplicas: 3
+  maxReplicas: 50
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+```
+
+## PostgreSQL 확장
+
+### 커넥션 풀 크기
+
+모든 인스턴스의 총 커넥션:
+
+```
+total_connections = max_open_conns × num_instances
+```
+
+예: 25 커넥션 × 10 인스턴스 = 250 커넥션
+
+### PgBouncer를 통한 커넥션 풀링
+
+많은 인스턴스를 위해 PgBouncer 사용:
+
+```ini
+[databases]
+iceberg_catalog = host=postgres port=5432 dbname=iceberg_catalog
+
+[pgbouncer]
+pool_mode = transaction
+max_client_conn = 1000
+default_pool_size = 50
+```
+
+## 성능 특성
+
+### 지연시간
+
+일반적인 작업 지연시간:
+
+| 작업 | p50 | p99 |
+|------|-----|-----|
+| 네임스페이스 목록 | 2ms | 10ms |
+| 네임스페이스 조회 | 1ms | 5ms |
+| 테이블 목록 | 3ms | 15ms |
+| 테이블 로드 | 5ms | 25ms |
+| 테이블 생성 | 20ms | 100ms |
+| 테이블 커밋 | 30ms | 150ms |
+
+### 처리량
+
+단일 노드 용량 (하드웨어에 따라 다름):
+
+- **읽기**: 5,000-10,000 요청/초
+- **쓰기**: 500-2,000 요청/초
+
+노드 추가로 선형 확장 가능합니다.
+
+### 리소스 사용량
+
+인스턴스당:
+
+| 리소스 | 일반 | 피크 |
+|--------|------|------|
+| 메모리 | 50-100 MB | 200 MB |
+| CPU | 0.2 코어 | 1 코어 |
+| 고루틴 | 100-500 | 2,000 |
+
+## 병목 및 해결책
+
+### PostgreSQL 커넥션
+
+**증상**: `too many connections` 에러
+
+**해결책**:
+- PgBouncer 사용
+- 인스턴스당 `max_open_conns` 줄이기
+- PostgreSQL `max_connections` 늘리기
+
+### 락 경합
+
+**증상**: 높은 커밋 지연시간, 타임아웃 에러
+
+**해결책**:
+- `lock_timeout` 늘리기
+- 같은 테이블에 대한 쓰기 빈도 줄이기
+- 테이블 간 워크로드 분산
+
+## 용량 계획
+
+### 인스턴스 추정
+
+```
+instances = (peak_requests_per_second / requests_per_instance) × 1.5
+```
+
+예: 10,000 RPS, 5,000 RPS/인스턴스 = 3 인스턴스 × 1.5 = 5 인스턴스
+
+## 고가용성
+
+### 다중 인스턴스
+
+HA를 위해 최소 3개 인스턴스 실행:
+
+```yaml
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+```
+
+### PostgreSQL HA
+
+자동 장애 조치가 가능한 관리형 PostgreSQL 사용:
+- AWS RDS Multi-AZ
+- GCP Cloud SQL HA
+- Azure Database for PostgreSQL
+
+또는 자체 관리 HA를 위해 Patroni/Stolon으로 배포합니다.

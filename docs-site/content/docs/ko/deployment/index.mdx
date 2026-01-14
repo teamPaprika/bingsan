@@ -1,0 +1,57 @@
+---
+title: 배포
+description: 다양한 환경에서 Bingsan 배포
+---
+
+# 배포
+
+이 섹션에서는 다양한 환경에서 Bingsan을 배포하는 방법을 다룹니다.
+
+## 배포 옵션
+
+### 개발 환경
+
+- [Docker Compose](/docs/deployment/docker) - 빠른 로컬 설정
+
+### 프로덕션
+
+- [Kubernetes](/docs/deployment/kubernetes) - 확장 가능한 클라우드 배포
+- [Docker](/docs/deployment/docker) - 단일 노드 프로덕션
+
+## 빠른 비교
+
+| 기능 | Docker Compose | Docker | Kubernetes |
+|------|---------------|--------|------------|
+| 복잡도 | 낮음 | 낮음 | 높음 |
+| 확장성 | 단일 노드 | 단일 노드 | 다중 노드 |
+| HA | 아니오 | 아니오 | 예 |
+| 모니터링 | 수동 | 수동 | 통합 |
+| 적합 대상 | 개발 | 소규모 프로덕션 | 대규모 프로덕션 |
+
+## 전제조건
+
+### 모든 배포
+
+- PostgreSQL 15+ 데이터베이스
+- 프로덕션용 오브젝트 스토리지 (S3/GCS)
+
+### Docker
+
+- Docker Engine 20.10+
+- Docker Compose v2.0+ (Compose 배포용)
+
+### Kubernetes
+
+- Kubernetes 1.24+
+- kubectl 구성 완료
+- Helm 3.x (선택사항)
+
+## 공통 설정
+
+배포 방법에 관계없이 다음을 구성해야 합니다:
+
+1. **데이터베이스**: PostgreSQL 연결 정보
+2. **스토리지**: S3/GCS 자격 증명 및 버킷
+3. **인증** (선택사항): OAuth/API 키 설정
+
+모든 옵션은 [설정](/docs/configuration)을 참조하세요.

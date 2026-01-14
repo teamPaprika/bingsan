@@ -1,0 +1,176 @@
+---
+title: Data Model
+description: Database schema and metadata storage in Bingsan
+---
+
+# Data Model
+
+Bingsan stores all catalog metadata in PostgreSQL. This page describes the database schema.
+
+## Overview
+
+```
+┌─────────────────┐     ┌─────────────────┐
+│   namespaces    │     │     tables      │
+├─────────────────┤     ├─────────────────┤
+│ id              │────▶│ namespace_id    │
+│ name            │     │ name            │
+│ properties      │     │ metadata_loc    │
+└─────────────────┘     │ metadata        │
+                        └─────────────────┘
+                                │
+                                ▼
+┌─────────────────┐     ┌─────────────────┐
+│     views       │     │   scan_plans    │
+├─────────────────┤     ├─────────────────┤
+│ namespace_id    │     │ table_id        │
+│ name            │     │ plan_id         │
+│ metadata_loc    │     │ status          │
+│ metadata        │     │ tasks           │
+└─────────────────┘     └─────────────────┘
+```
+
+## Tables
+
+### namespaces
+
+Stores namespace metadata.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | BIGSERIAL | Primary key |
+| `name` | TEXT[] | Namespace name as array |
+| `properties` | JSONB | Namespace properties |
+| `created_at` | TIMESTAMPTZ | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | Last update timestamp |
+
+### tables
+
+Stores Iceberg table metadata.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | BIGSERIAL | Primary key |
+| `namespace_id` | BIGINT | Foreign key to namespaces |
+| `name` | TEXT | Table name |
+| `table_uuid` | UUID | Iceberg table UUID |
+| `metadata_location` | TEXT | Path to current metadata file |
+| `metadata` | JSONB | Cached table metadata (optional) |
+| `created_at` | TIMESTAMPTZ | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | Last update timestamp |
+
+### views
+
+Stores Iceberg view metadata with similar structure to tables.
+
+### scan_plans
+
+Stores scan plan state for server-side planning.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | BIGSERIAL | Primary key |
+| `plan_id` | UUID | External plan identifier |
+| `table_id` | BIGINT | Foreign key to tables |
+| `status` | TEXT | Plan status |
+| `request` | JSONB | Original plan request |
+| `tasks` | JSONB | Computed scan tasks |
+
+## Metadata Storage Strategy
+
+### Database vs Object Storage
+
+Bingsan uses a hybrid approach:
+
+**PostgreSQL stores:**
+- Namespace metadata
+- Table/view registry (name, UUID, location)
+- Scan plan state
+- Cached metadata (optional)
+
+**Object storage (S3/GCS) stores:**
+- Full Iceberg metadata JSON files
+- Manifest lists
+- Manifests
+- Data files
+
+### Metadata Caching
+
+Table metadata can be cached in PostgreSQL for faster reads, avoiding reading from object storage for every request.
+
+## Locking Model
+
+### Advisory Locks
+
+PostgreSQL advisory locks ensure consistency:
+
+```sql
+-- Namespace-level lock
+SELECT pg_advisory_lock(hashtext('ns:' || $1));
+
+-- Table-level lock
+SELECT pg_advisory_xact_lock($1);
+```
+
+Locks are held for the minimum necessary duration.
+
+## Migrations
+
+Bingsan uses [golang-migrate](https://github.com/golang-migrate/migrate) for schema migrations.
+
+### Automatic Migrations
+
+Migrations run automatically on startup.
+
+### Manual Migrations
+
+```bash
+# Check current version
+migrate -database "postgres://..." -path migrations version
+
+# Apply migrations
+migrate -database "postgres://..." -path migrations up
+
+# Rollback one migration
+migrate -database "postgres://..." -path migrations down 1
+```
+
+## Indexes
+
+Indexes are optimized for common query patterns:
+
+| Query | Index Used |
+|-------|------------|
+| List namespaces | `idx_namespaces_name` (GIN) |
+| Get namespace by name | `namespaces_name_key` (UNIQUE) |
+| List tables in namespace | `idx_tables_namespace` |
+| Get table by name | `tables_namespace_id_name_key` (UNIQUE) |
+| Find table by UUID | `idx_tables_uuid` |
+
+## Data Lifecycle
+
+### Namespace
+
+1. **Create**: Insert into `namespaces`
+2. **Update**: Update `properties`, set `updated_at`
+3. **Delete**: Delete from `namespaces` (must be empty)
+
+### Table
+
+1. **Create**: Insert into `tables`, write metadata to storage
+2. **Commit**: Update `metadata_location`, optional metadata cache
+3. **Drop**: Delete from `tables`, optionally purge storage
+
+## Backup and Recovery
+
+### PostgreSQL Backup
+
+```bash
+# Full backup
+pg_dump -h localhost -U iceberg iceberg_catalog > backup.sql
+
+# Restore
+psql -h localhost -U iceberg iceberg_catalog < backup.sql
+```
+
+Since full Iceberg metadata is in object storage, the database can be rebuilt from metadata files if needed.

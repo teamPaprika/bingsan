@@ -1,0 +1,23 @@
+---
+title: Integrations
+description: Connect Bingsan with Spark, Trino, PyIceberg, and more
+---
+
+# Integrations
+
+Bingsan integrates with all major Iceberg clients through the standard REST Catalog API.
+
+## Supported Clients
+
+- [Apache Spark](/docs/integrations/spark) - Batch and streaming data processing
+- [Trino](/docs/integrations/trino) - Distributed SQL query engine
+- [PyIceberg](/docs/integrations/pyiceberg) - Python library for Iceberg
+
+## Connection Overview
+
+All clients connect using the REST catalog type:
+
+```
+Catalog URI: http://localhost:8181
+Catalog Type: rest
+```

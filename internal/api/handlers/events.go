@@ -9,9 +9,9 @@ import (
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/kimuyb/bingsan/internal/config"
-	"github.com/kimuyb/bingsan/internal/db"
-	"github.com/kimuyb/bingsan/internal/events"
+	"github.com/teamPaprika/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/events"
 )
 
 // WebSocketUpgrade is middleware that checks for WebSocket upgrade requests.

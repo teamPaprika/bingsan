@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/kimuyb/bingsan/internal/api"
+	"github.com/teamPaprika/bingsan/internal/api"
 )
 
 // BenchmarkMemoryAllocation measures memory allocations per request.

@@ -1,0 +1,125 @@
+---
+title: Object Pooling
+description: Memory buffer reuse for reduced allocations
+---
+
+# Object Pooling
+
+Bingsan uses `sync.Pool` from Go's standard library to reduce memory allocation pressure in hot paths.
+
+## Overview
+
+Two types of pools are implemented:
+
+| Pool | Purpose | Default Size | Max Size |
+|------|---------|--------------|----------|
+| **BufferPool** | JSON serialization buffers | 4 KB | 64 KB |
+| **BytePool** | OAuth token generation | 32 bytes | 32 bytes |
+
+## How It Works
+
+### BufferPool
+
+The `BufferPool` provides reusable `bytes.Buffer` instances for JSON serialization:
+
+```
+Request 1 ──► Get buffer ──► Serialize JSON ──► Return buffer ──► Pool
+                  │                                  ▲
+                  └──────────────────────────────────┘
+                              Reused
+```
+
+**Key characteristics:**
+- Initial capacity: 4 KB (typical JSON metadata size)
+- Maximum size: 64 KB (oversized buffers are discarded)
+- Thread-safe via `sync.Pool`
+- Automatic reset on get
+
+### BytePool
+
+Fixed size: 32 bytes for OAuth access token generation.
+
+## Usage Patterns
+
+### In API Handlers
+
+```go
+func (h *Handler) GetTable(ctx *fiber.Ctx) error {
+    buf := pool.GetBuffer()
+    defer pool.PutBuffer(buf)  // Always return!
+
+    encoder := json.NewEncoder(buf)
+    if err := encoder.Encode(table); err != nil {
+        return err
+    }
+
+    return ctx.Send(buf.Bytes())
+}
+```
+
+## Configuration
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `DefaultBufferSize` | 4096 | Initial buffer capacity in bytes |
+| `MaxBufferSize` | 65536 | Maximum buffer size before discard |
+| `TokenSize` | 32 | Fixed size for token byte slices |
+
+## Best Practices
+
+### Always Use `defer`
+
+```go
+buf := pool.GetBuffer()
+defer pool.PutBuffer(buf)  // Guaranteed return
+```
+
+### Don't Hold References
+
+```go
+// Wrong: Reference escapes
+data := buf.Bytes()
+pool.PutBuffer(buf)
+return data  // data is now invalid!
+
+// Correct: Copy if needed
+data := make([]byte, buf.Len())
+copy(data, buf.Bytes())
+pool.PutBuffer(buf)
+return data
+```
+
+## Metrics
+
+Pool performance is exposed via Prometheus:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `bingsan_pool_gets_total` | Counter | Total Get() operations |
+| `bingsan_pool_returns_total` | Counter | Total Put() operations |
+| `bingsan_pool_discards_total` | Counter | Oversized items discarded |
+| `bingsan_pool_misses_total` | Counter | New allocations (pool empty) |
+
+## Benchmarks
+
+```bash
+go test -bench=BenchmarkPool -benchmem ./tests/benchmark/...
+```
+
+Expected results:
+
+| Benchmark | Time | Allocs |
+|-----------|------|--------|
+| BufferPool.Get/Put | ~50ns | 0 |
+| BufferPool.Concurrent | ~100ns | 0 |
+| BytePool.Get/Put | ~30ns | 0 |
+
+## Troubleshooting
+
+### High Discard Rate
+
+If `bingsan_pool_discards_total` is increasing rapidly:
+
+1. **Cause**: Many large responses exceeding 64KB
+2. **Impact**: Reduced pool effectiveness
+3. **Solution**: Consider increasing `MaxBufferSize` for schemas with 100+ columns

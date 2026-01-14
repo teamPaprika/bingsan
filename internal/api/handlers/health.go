@@ -6,7 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/db"
 )
 
 // HealthCheck returns a simple health check response.

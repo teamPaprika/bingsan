@@ -18,12 +18,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/kimuyb/bingsan/internal/api/handlers"
-	"github.com/kimuyb/bingsan/internal/api/middleware"
-	"github.com/kimuyb/bingsan/internal/config"
-	"github.com/kimuyb/bingsan/internal/db"
-	"github.com/kimuyb/bingsan/internal/events"
-	_ "github.com/kimuyb/bingsan/internal/metrics" // Register custom Prometheus metrics
+	"github.com/teamPaprika/bingsan/internal/api/handlers"
+	"github.com/teamPaprika/bingsan/internal/api/middleware"
+	"github.com/teamPaprika/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/events"
+	_ "github.com/teamPaprika/bingsan/internal/metrics" // Register custom Prometheus metrics
 )
 
 // polarisPathPattern matches /api/catalog/v1/{segment}/...

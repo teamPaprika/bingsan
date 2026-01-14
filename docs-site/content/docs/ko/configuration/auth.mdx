@@ -1,0 +1,80 @@
+---
+title: 인증 설정
+description: Bingsan의 인증 및 권한 부여 구성
+---
+
+# 인증 설정
+
+카탈로그 API의 인증 및 권한 부여를 구성합니다.
+
+## 옵션
+
+```yaml
+auth:
+  enabled: false
+  token_expiry: 1h
+  signing_key: "change-me-in-production"
+
+  oauth2:
+    enabled: false
+    issuer: ""
+
+  api_key:
+    enabled: false
+```
+
+## 참조
+
+| 옵션 | 타입 | 기본값 | 설명 |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `false` | 인증 활성화 |
+| `token_expiry` | duration | `1h` | 액세스 토큰 수명 |
+| `signing_key` | string | - | 토큰 서명 비밀 키 |
+| `oauth2.enabled` | boolean | `false` | OAuth2 엔드포인트 활성화 |
+
+## 인증 활성화
+
+```yaml
+auth:
+  enabled: true
+  token_expiry: 1h
+  signing_key: "your-secure-256-bit-secret-key"
+```
+
+<Callout type="error">
+프로덕션에서는 반드시 signing_key를 변경하세요.
+</Callout>
+
+보안 키 생성:
+
+```bash
+openssl rand -hex 32
+```
+
+## OAuth2 토큰 교환
+
+```bash
+curl -X POST http://localhost:8181/v1/oauth/tokens \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=my-client" \
+  -d "client_secret=my-secret"
+```
+
+## 클라이언트 설정
+
+### Apache Spark
+
+```properties
+spark.sql.catalog.bingsan.credential=client_id:client_secret
+```
+
+### PyIceberg
+
+```python
+catalog = load_catalog(
+    "rest",
+    uri="http://localhost:8181",
+    credential="client_id:client_secret"
+)
+```

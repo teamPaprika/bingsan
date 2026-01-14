@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kimuyb/bingsan/internal/api"
-	"github.com/kimuyb/bingsan/internal/config"
-	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/api"
+	"github.com/teamPaprika/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/db"
 )
 
 func main() {

@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kimuyb/bingsan/internal/db"
-	"github.com/kimuyb/bingsan/internal/leader"
-	"github.com/kimuyb/bingsan/internal/metrics"
+	"github.com/teamPaprika/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/leader"
+	"github.com/teamPaprika/bingsan/internal/metrics"
 )
 
 // Task represents a background task that runs periodically.

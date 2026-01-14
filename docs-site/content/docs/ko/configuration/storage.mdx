@@ -1,0 +1,77 @@
+---
+title: 스토리지 설정
+description: Iceberg 데이터 파일용 스토리지 백엔드 구성
+---
+
+# 스토리지 설정
+
+Iceberg 데이터 파일용 스토리지 백엔드를 구성합니다.
+
+## 개요
+
+Bingsan은 세 가지 스토리지 백엔드를 지원합니다:
+
+- **S3** - Amazon S3 및 호환 서비스 (MinIO, R2)
+- **GCS** - Google Cloud Storage
+- **Local** - 로컬 파일시스템 (개발 전용)
+
+## 옵션
+
+```yaml
+storage:
+  type: s3
+  warehouse: s3://bucket/warehouse
+
+  s3:
+    endpoint: ""
+    region: us-east-1
+    access_key_id: ""
+    secret_access_key: ""
+    bucket: warehouse
+    use_path_style: false
+```
+
+## Amazon S3
+
+IAM 역할 사용 (권장):
+
+```yaml
+storage:
+  type: s3
+  warehouse: s3://my-bucket/warehouse
+
+  s3:
+    region: us-east-1
+    bucket: my-bucket
+    # 자격 증명 불필요 - 인스턴스 역할 사용
+```
+
+## MinIO
+
+```yaml
+storage:
+  type: s3
+  warehouse: s3://warehouse/data
+
+  s3:
+    endpoint: "http://minio:9000"
+    access_key_id: "minioadmin"
+    secret_access_key: "minioadmin"
+    bucket: warehouse
+    use_path_style: true
+```
+
+## 로컬 스토리지
+
+<Callout type="warn">
+로컬 스토리지는 개발 및 테스트 전용입니다.
+</Callout>
+
+```yaml
+storage:
+  type: local
+  warehouse: file:///data/warehouse
+
+  local:
+    root_path: /data/warehouse
+```

@@ -1,0 +1,52 @@
+---
+title: 데이터베이스 설정
+description: 메타데이터 저장을 위한 PostgreSQL 연결 구성
+---
+
+# 데이터베이스 설정
+
+메타데이터 저장을 위한 PostgreSQL 연결을 구성합니다.
+
+## 옵션
+
+```yaml
+database:
+  host: localhost
+  port: 5432
+  user: iceberg
+  password: iceberg
+  database: iceberg_catalog
+  ssl_mode: disable
+  max_open_conns: 25
+  max_idle_conns: 5
+```
+
+## 참조
+
+| 옵션 | 타입 | 기본값 | 설명 |
+|--------|------|---------|-------------|
+| `host` | string | `localhost` | PostgreSQL 서버 호스트명 |
+| `port` | integer | `5432` | PostgreSQL 서버 포트 |
+| `user` | string | `iceberg` | 데이터베이스 사용자 |
+| `password` | string | `iceberg` | 데이터베이스 비밀번호 |
+| `database` | string | `iceberg_catalog` | 데이터베이스 이름 |
+| `ssl_mode` | string | `disable` | SSL 모드 |
+| `max_open_conns` | integer | `25` | 최대 열린 연결 수 |
+
+## SSL 모드
+
+| 모드 | 설명 |
+|------|-------------|
+| `disable` | SSL 없음 (개발 전용) |
+| `require` | SSL 사용, 인증서 검증 안 함 |
+| `verify-full` | 인증서 및 호스트명 검증 |
+
+## 데이터베이스 설정
+
+```sql
+CREATE DATABASE iceberg_catalog;
+CREATE USER iceberg WITH PASSWORD 'your-secure-password';
+GRANT ALL PRIVILEGES ON DATABASE iceberg_catalog TO iceberg;
+```
+
+Bingsan은 시작 시 자동으로 데이터베이스 마이그레이션을 실행합니다.

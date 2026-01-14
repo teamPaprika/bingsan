@@ -1,0 +1,155 @@
+---
+title: Docker
+description: Docker 또는 Docker Compose를 사용한 Bingsan 배포
+---
+
+# Docker 배포
+
+Docker 또는 Docker Compose를 사용하여 Bingsan을 배포합니다.
+
+## Docker Compose (개발용)
+
+개발 및 테스트를 위한 가장 빠른 시작 방법입니다.
+
+### 전제조건
+
+- Docker Engine 20.10+
+- Docker Compose v2.0+
+
+### 빠른 시작
+
+```bash
+# 저장소 클론
+git clone https://github.com/teamPaprika/bingsan.git
+cd bingsan
+
+# 설정 복사
+cp config.example.yaml config.yaml
+
+# 서비스 시작
+docker compose -f deployments/docker/docker-compose.yml up -d
+```
+
+### docker-compose.yml
+
+```yaml
+version: '3.8'
+
+services:
+  bingsan:
+    image: ghcr.io/kimuyb/bingsan:latest
+    ports:
+      - "8181:8181"
+    environment:
+      - ICEBERG_SERVER_HOST=0.0.0.0
+      - ICEBERG_SERVER_PORT=8181
+      - ICEBERG_DATABASE_HOST=postgres
+      - ICEBERG_DATABASE_PORT=5432
+      - ICEBERG_DATABASE_USER=iceberg
+      - ICEBERG_DATABASE_PASSWORD=iceberg
+      - ICEBERG_DATABASE_DATABASE=iceberg_catalog
+      - ICEBERG_STORAGE_TYPE=local
+      - ICEBERG_STORAGE_WAREHOUSE=file:///data/warehouse
+    volumes:
+      - warehouse-data:/data/warehouse
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=iceberg
+      - POSTGRES_PASSWORD=iceberg
+      - POSTGRES_DB=iceberg_catalog
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iceberg -d iceberg_catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  warehouse-data:
+  postgres-data:
+```
+
+### 스택 관리
+
+```bash
+# 로그 보기
+docker compose -f deployments/docker/docker-compose.yml logs -f
+
+# 서비스 중지
+docker compose -f deployments/docker/docker-compose.yml down
+
+# 중지 및 볼륨 제거
+docker compose -f deployments/docker/docker-compose.yml down -v
+```
+
+## S3와 함께 Docker Compose (MinIO)
+
+S3 호환 스토리지 테스트를 위해 compose 파일에 MinIO를 추가하고 S3 스토리지 설정에 적절한 환경 변수를 구성합니다.
+
+## 독립 실행형 Docker
+
+독립 컨테이너로 Bingsan을 실행합니다 (외부 PostgreSQL 필요).
+
+```bash
+# 이미지 풀
+docker pull ghcr.io/kimuyb/bingsan:latest
+
+# 환경 변수와 함께 실행
+docker run -d \
+  --name bingsan \
+  -p 8181:8181 \
+  -e ICEBERG_DATABASE_HOST=your-postgres-host \
+  -e ICEBERG_DATABASE_PORT=5432 \
+  -e ICEBERG_DATABASE_USER=iceberg \
+  -e ICEBERG_DATABASE_PASSWORD=your-password \
+  -e ICEBERG_DATABASE_DATABASE=iceberg_catalog \
+  -e ICEBERG_STORAGE_TYPE=s3 \
+  -e ICEBERG_STORAGE_WAREHOUSE=s3://your-bucket/warehouse \
+  -e ICEBERG_STORAGE_S3_REGION=us-east-1 \
+  ghcr.io/kimuyb/bingsan:latest
+```
+
+## 프로덕션 권장사항
+
+1. **특정 이미지 태그 사용**: 프로덕션에서 `latest` 사용 금지
+2. **리소스 제한**: 메모리 및 CPU 제한 설정
+3. **헬스 체크**: 컨테이너 헬스 체크 구성
+4. **로깅**: json-file 또는 외부 로깅 드라이버 사용
+5. **시크릿**: Docker secrets 또는 외부 시크릿 관리 사용
+
+## 트러블슈팅
+
+### 컨테이너 시작 안됨
+
+```bash
+# 로그 확인
+docker logs bingsan
+
+# 포트 사용 중인지 확인
+lsof -i :8181
+```
+
+### 데이터베이스 연결 실패
+
+```bash
+# PostgreSQL 연결 테스트
+docker exec bingsan nc -zv postgres 5432
+
+# 환경 변수 확인
+docker exec bingsan env | grep ICEBERG_DATABASE
+```
+
+### 헬스 체크 실패
+
+```bash
+# 헬스 엔드포인트 테스트
+docker exec bingsan wget -q -O- http://localhost:8181/health
+```
