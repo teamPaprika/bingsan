@@ -11,7 +11,7 @@ import (
 // Last Column ID Calculation Tests
 // =============================================================================
 
-// calculateLastColumnID mirrors the logic in CreateTable handler
+// calculateLastColumnID mirrors the logic in CreateTable handler.
 func calculateLastColumnID(schema map[string]any) int {
 	lastColumnID := 0
 	if fields, ok := schema["fields"].([]any); ok {
@@ -133,7 +133,7 @@ func TestCalculateLastColumnID(t *testing.T) {
 // Location Path Construction Tests
 // =============================================================================
 
-// buildTableLocation mirrors the logic in CreateTable handler
+// buildTableLocation mirrors the logic in CreateTable handler.
 func buildTableLocation(warehouse string, namespaceName []string, tableName string) string {
 	warehouse = strings.TrimSuffix(warehouse, "/")
 	nsPath := strings.Join(namespaceName, "/")
@@ -302,13 +302,13 @@ func TestWarehouseWithMultipleTrailingSlashes(t *testing.T) {
 	// TrimSuffix only removes one slash, but this is an edge case
 	warehouse := "s3://bucket//"
 	namespace := []string{"ns"}
-	table := "table"
+	tableName := "table"
 
-	result := buildTableLocation(warehouse, namespace, table)
-	// After one TrimSuffix, we'd have "s3://bucket/" which should work
-	// Actually TrimSuffix removes one "/" so "s3://bucket//" becomes "s3://bucket/"
+	result := buildTableLocation(warehouse, namespace, tableName)
+	// After one TrimSuffix, we'd have "s3://bucket/" which should work.
+	// Actually TrimSuffix removes one "/" so "s3://bucket//" becomes "s3://bucket/".
 	// Then we add "/ns/table" = "s3://bucket//ns/table" - still has double slash!
-	// This test documents the edge case - multiple trailing slashes are not fully handled
-	// For production, we might want to use strings.TrimRight instead
-	_ = result
+	// This test documents the edge case - multiple trailing slashes are not fully handled.
+	// For production, we might want to use strings.TrimRight instead.
+	assert.Contains(t, result, "ns")
 }

@@ -15,10 +15,10 @@ import (
 
 func TestProcessorNewCreatesDeepCopy(t *testing.T) {
 	original := map[string]any{
-		"table-uuid":  "original-uuid",
-		"snapshots":   []any{},
-		"schemas":     []any{map[string]any{"schema-id": 0}},
-		"refs":        map[string]any{},
+		"table-uuid": "original-uuid",
+		"snapshots":  []any{},
+		"schemas":    []any{map[string]any{"schema-id": 0}},
+		"refs":       map[string]any{},
 	}
 
 	processor := updates.NewProcessor(original)

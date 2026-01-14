@@ -130,6 +130,7 @@ issues:
     - path: _test\.go
       linters:
         - dupl
+        - errcheck
         - goconst
         - gosec
         - noctx
