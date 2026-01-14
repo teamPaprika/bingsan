@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kimuyb/bingsan/internal/api/handlers/updates"
 	"github.com/kimuyb/bingsan/internal/config"
 	"github.com/kimuyb/bingsan/internal/db"
 	"github.com/kimuyb/bingsan/internal/metrics"
@@ -86,11 +87,8 @@ type Requirement struct {
 }
 
 // Update is a table update operation.
-type Update struct {
-	Action string         `json:"action"`
-	// Different actions have different fields
-	// We use json.RawMessage to handle this dynamically
-}
+// It captures the action type and raw JSON for type-specific parsing.
+type Update = updates.RawUpdate
 
 // RenameTableRequest is the request for renaming a table.
 type RenameTableRequest struct {
@@ -227,30 +225,41 @@ func CreateTable(database *db.DB, cfg *config.Config) fiber.Handler {
 		tableUUID := uuid.New().String()
 		location := req.Location
 		if location == "" {
-			location = fmt.Sprintf("%s/%s/%s",
-				cfg.Storage.Warehouse,
-				strings.Join(namespaceName, "/"),
-				req.Name,
-			)
+			warehouse := strings.TrimSuffix(cfg.Storage.Warehouse, "/")
+			nsPath := strings.Join(namespaceName, "/")
+			location = fmt.Sprintf("%s/%s/%s", warehouse, nsPath, req.Name)
+		}
+
+		// Calculate last-column-id from schema fields
+		lastColumnID := 0
+		if fields, ok := req.Schema["fields"].([]any); ok {
+			for _, f := range fields {
+				if field, ok := f.(map[string]any); ok {
+					if id, ok := field["id"].(float64); ok && int(id) > lastColumnID {
+						lastColumnID = int(id)
+					}
+				}
+			}
 		}
 
 		// Build metadata
 		now := time.Now().UnixMilli()
 		metadata := map[string]any{
-			"format-version":    2,
-			"table-uuid":        tableUUID,
-			"location":          location,
-			"last-updated-ms":   now,
-			"properties":        req.Properties,
-			"schemas":           []any{req.Schema},
-			"current-schema-id": 0,
-			"partition-specs":   []any{req.PartitionSpec},
-			"default-spec-id":   0,
-			"sort-orders":       []any{req.SortOrder},
+			"format-version":        2,
+			"table-uuid":            tableUUID,
+			"location":              location,
+			"last-updated-ms":       now,
+			"last-column-id":        lastColumnID,
+			"properties":            req.Properties,
+			"schemas":               []any{req.Schema},
+			"current-schema-id":     0,
+			"partition-specs":       []any{req.PartitionSpec},
+			"default-spec-id":       0,
+			"sort-orders":           []any{req.SortOrder},
 			"default-sort-order-id": 0,
-			"snapshots":         []any{},
-			"snapshot-log":      []any{},
-			"refs":              map[string]any{},
+			"snapshots":             []any{},
+			"snapshot-log":          []any{},
+			"refs":                  map[string]any{},
 		}
 
 		// Generate metadata location
@@ -390,7 +399,17 @@ func CommitTable(database *db.DB, cfg *config.Config) fiber.Handler {
 				}
 			}
 
-			// Apply updates
+			// Apply updates using the update processor
+			if len(req.Updates) > 0 {
+				processor := updates.NewProcessor(metadata)
+				if err := processor.Apply(req.Updates); err != nil {
+					commitErr = fmt.Errorf("update_failed:%s", err.Error())
+					return nil // Don't retry on update failure
+				}
+				metadata = processor.Result()
+			}
+
+			// Update timestamp
 			now := time.Now().UnixMilli()
 			metadata["last-updated-ms"] = now
 
@@ -476,6 +495,16 @@ func CommitTable(database *db.DB, cfg *config.Config) fiber.Handler {
 						"message": fmt.Sprintf("Requirement failed: %s", reqType),
 						"type":    "CommitFailedException",
 						"code":    409,
+					},
+				})
+			}
+			if strings.HasPrefix(errStr, "update_failed:") {
+				updateErr := strings.TrimPrefix(errStr, "update_failed:")
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": fiber.Map{
+						"message": fmt.Sprintf("Update failed: %s", updateErr),
+						"type":    "BadRequestException",
+						"code":    400,
 					},
 				})
 			}

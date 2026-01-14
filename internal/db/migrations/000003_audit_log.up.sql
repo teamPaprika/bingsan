@@ -26,9 +26,9 @@ CREATE INDEX idx_audit_log_namespace ON audit_log(namespace, timestamp DESC);
 CREATE INDEX idx_audit_log_event_type ON audit_log(event_type, timestamp DESC);
 CREATE INDEX idx_audit_log_request_id ON audit_log(request_id);
 
--- Partial index for recent logs (most commonly queried)
-CREATE INDEX idx_audit_log_recent ON audit_log(timestamp DESC)
-    WHERE timestamp > NOW() - INTERVAL '7 days';
+-- Index on timestamp for efficient time-based queries
+-- Note: Partial indexes with NOW() are not supported (non-immutable)
+-- Rely on standard index with timestamp DESC for time-based queries
 
 -- Function to clean up old audit logs
 CREATE OR REPLACE FUNCTION cleanup_old_audit_logs(retention_days INTEGER DEFAULT 90)
