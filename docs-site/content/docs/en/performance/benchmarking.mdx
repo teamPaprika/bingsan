@@ -1,0 +1,196 @@
+---
+title: Benchmarking
+description: Load testing with Go benchmarks and Apache Polaris Tools
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Benchmarking
+
+Bingsan includes comprehensive benchmarking support using both Go's built-in benchmarks and the Apache Polaris Tools Gatling framework.
+
+## Quick Start
+
+### Go Benchmarks
+
+```bash
+# All benchmarks
+go test -bench=. -benchmem ./tests/benchmark/...
+
+# Specific benchmark
+go test -bench=BenchmarkTable -benchmem ./tests/benchmark/...
+
+# Pool benchmarks
+go test -bench=BenchmarkPool -benchmem ./tests/benchmark/...
+```
+
+### Load Testing with Polaris Tools
+
+```bash
+cd benchmarks
+
+# One-time setup
+make setup
+
+# Start Bingsan with OAuth2
+make start-bingsan
+
+# Create test dataset
+make create-dataset
+
+# Run read benchmark
+make read-benchmark
+
+# View results
+make report
+```
+
+## Go Benchmarks
+
+### Available Benchmarks
+
+| Benchmark | Description |
+|-----------|-------------|
+| `BenchmarkBaseline` | Baseline without pooling |
+| `BenchmarkPool` | With object pooling |
+| `BenchmarkTable` | Table operations |
+| `BenchmarkNamespace` | Namespace operations |
+| `BenchmarkConcurrent` | Concurrent load |
+| `BenchmarkMemory` | Memory allocation |
+
+### Compare Before/After
+
+```bash
+# Baseline
+go test -bench=. -benchmem ./tests/benchmark/... | tee baseline.txt
+
+# After changes
+go test -bench=. -benchmem ./tests/benchmark/... | tee optimized.txt
+
+# Compare
+benchstat baseline.txt optimized.txt
+```
+
+### With Profiling
+
+```bash
+# CPU profile
+go test -bench=BenchmarkTable -cpuprofile=cpu.prof ./tests/benchmark/...
+go tool pprof cpu.prof
+
+# Memory profile
+go test -bench=BenchmarkTable -memprofile=mem.prof ./tests/benchmark/...
+go tool pprof mem.prof
+```
+
+### Expected Results
+
+| Benchmark | Ops/sec | ns/op | B/op | allocs/op |
+|-----------|---------|-------|------|-----------|
+| TableMetadata | 100,000+ | &lt;10,000 | &lt;5,000 | &lt;50 |
+| LargeSchema | 10,000+ | &lt;100,000 | &lt;50,000 | &lt;200 |
+| PoolGet/Put | 20,000,000+ | &lt;50 | 0 | 0 |
+
+## Polaris Tools Load Testing
+
+### Prerequisites
+
+- **Java 17+** - Required for Gatling
+- **Docker & Docker Compose** - For running Bingsan
+- **Make** - For running benchmark commands
+
+### Setup
+
+```bash
+cd benchmarks
+make setup
+```
+
+### Running Benchmarks
+
+| Command | Description |
+|---------|-------------|
+| `make read-benchmark` | Read-only operations |
+| `make read-update-benchmark` | Mixed read/write (80/20) |
+| `make create-commits-benchmark` | Commit throughput |
+| `make weighted-benchmark` | Weighted workload simulation |
+| `make full-benchmark` | All benchmarks sequentially |
+
+### Configuration
+
+Edit `config/bingsan.conf`:
+
+```text
+http.base-url = "http://localhost:8181"
+
+auth.client-id = "benchmark-client"
+auth.client-secret = "benchmark-secret"
+
+dataset {
+  namespace-width = 2
+  namespace-depth = 3
+  tables-per-namespace = 5
+  views-per-namespace = 3
+}
+
+workload.read-update-tree-dataset {
+  read-write-ratio = 0.8
+  throughput = "50/sec"
+  duration-in-minutes = 3
+}
+```
+
+## Polaris Compatibility Mode
+
+<Callout type="warn">
+**Production Warning**: Keep `polaris_enabled: false` in production. This mode is only for benchmark compatibility.
+</Callout>
+
+Polaris Tools expects a Polaris-compatible API. Enable via:
+
+```yaml
+compat:
+  polaris_enabled: true
+```
+
+## CI/CD Integration
+
+### GitHub Actions Example
+
+```yaml
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Run benchmarks
+        run: |
+          go test -bench=. -benchmem ./tests/benchmark/... | tee results.txt
+      - name: Compare with baseline
+        run: benchstat baseline.txt results.txt
+```
+
+## Troubleshooting
+
+### Java Version Error
+
+```bash
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+```
+
+### Connection Refused
+
+```bash
+docker ps | grep bingsan-bench
+make logs
+make quick-test
+```

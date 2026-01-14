@@ -1,0 +1,160 @@
+---
+title: 테스팅
+description: 테스트 실행 및 작성
+---
+
+# 테스팅
+
+Bingsan은 단위, 통합 및 벤치마크 테스트를 포함한 포괄적인 테스트 스위트를 갖추고 있습니다.
+
+## 테스트 실행
+
+```bash
+# 모든 테스트 실행
+make test
+
+# 상세 출력과 함께 실행
+go test -v ./...
+
+# 특정 패키지 실행
+go test -v ./internal/api/handlers/...
+
+# 특정 테스트 실행
+go test -v -run TestTableCreate ./tests/unit/...
+```
+
+## 테스트 구조
+
+```text
+tests/
+├── unit/           # 단위 테스트
+├── integration/    # 통합 테스트 (데이터베이스 필요)
+├── contract/       # API 계약 테스트
+├── e2e/            # 엔드투엔드 테스트
+├── benchmark/      # 성능 벤치마크
+└── fixtures/       # 테스트 데이터 및 SQL 픽스처
+```
+
+## 단위 테스트
+
+단위 테스트는 코드와 함께 또는 `tests/unit/`에 위치합니다:
+
+```bash
+# 단위 테스트만 실행
+go test -v ./internal/...
+```
+
+## 통합 테스트
+
+통합 테스트는 실행 중인 PostgreSQL 인스턴스가 필요합니다:
+
+```bash
+# 의존성 시작
+make docker-up
+
+# 통합 테스트 실행
+make test-integration
+```
+
+통합 테스트는 `integration` 빌드 태그를 사용합니다:
+
+```go
+//go:build integration
+
+package integration
+
+func TestDatabaseOperations(t *testing.T) {
+    // ...
+}
+```
+
+## 계약 테스트
+
+계약 테스트는 Iceberg REST 스펙과의 API 준수를 검증합니다:
+
+```bash
+go test -v ./tests/contract/...
+```
+
+## 테스트 작성
+
+### 테스트 네이밍
+
+```go
+func TestFeature_Scenario_ExpectedBehavior(t *testing.T) {
+    // 예: TestTableCreate_WithValidInput_ReturnsCreatedTable
+}
+```
+
+### 테이블 기반 테스트
+
+```go
+func TestValidation(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        wantErr bool
+    }{
+        {"valid input", "test", false},
+        {"empty input", "", true},
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := Validate(tt.input)
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+            }
+        })
+    }
+}
+```
+
+### 테스트 픽스처
+
+데이터베이스 테스트에 SQL 픽스처 사용:
+
+```bash
+tests/fixtures/
+├── namespaces.sql
+├── tables.sql
+└── cleanup.sql
+```
+
+## 벤치마크
+
+```bash
+# 모든 벤치마크 실행
+make bench
+
+# 특정 벤치마크 실행
+go test -bench=BenchmarkTable -benchmem ./tests/benchmark/...
+
+# 전후 비교
+go test -bench=. ./tests/benchmark/... | tee before.txt
+# 변경 후
+go test -bench=. ./tests/benchmark/... | tee after.txt
+benchstat before.txt after.txt
+```
+
+## 커버리지
+
+```bash
+# 커버리지 리포트 생성
+go test -coverprofile=coverage.out ./...
+
+# 브라우저에서 보기
+go tool cover -html=coverage.out
+
+# 커버리지 퍼센트 확인
+go tool cover -func=coverage.out
+```
+
+## CI 통합
+
+테스트는 GitHub Actions를 통해 Pull Request에서 자동으로 실행됩니다. CI 파이프라인:
+
+1. 린터 실행 (golangci-lint)
+2. 단위 테스트 실행
+3. PostgreSQL 서비스와 함께 통합 테스트 실행
+4. 커버리지 리포트

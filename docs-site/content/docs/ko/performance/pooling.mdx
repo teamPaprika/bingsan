@@ -1,0 +1,115 @@
+---
+title: 오브젝트 풀링
+description: 할당 감소를 위한 메모리 버퍼 재사용
+---
+
+# 오브젝트 풀링
+
+Bingsan은 Go 표준 라이브러리의 `sync.Pool`을 사용하여 핫 패스에서 메모리 할당 압력을 줄입니다.
+
+## 개요
+
+두 가지 유형의 풀이 구현되어 있습니다:
+
+| 풀 | 용도 | 기본 크기 | 최대 크기 |
+|----|------|----------|----------|
+| **BufferPool** | JSON 직렬화 버퍼 | 4 KB | 64 KB |
+| **BytePool** | OAuth 토큰 생성 | 32 bytes | 32 bytes |
+
+## 동작 방식
+
+### BufferPool
+
+`BufferPool`은 JSON 직렬화를 위한 재사용 가능한 `bytes.Buffer` 인스턴스를 제공합니다:
+
+```
+요청 1 ──► 버퍼 가져오기 ──► JSON 직렬화 ──► 버퍼 반환 ──► 풀
+                  │                                  ▲
+                  └──────────────────────────────────┘
+                              재사용됨
+```
+
+**주요 특성:**
+- 초기 용량: 4 KB (일반적인 JSON 메타데이터 크기)
+- 최대 크기: 64 KB (과대 버퍼는 폐기)
+- `sync.Pool`을 통한 스레드 안전
+- 가져올 때 자동 리셋
+
+### BytePool
+
+고정 크기: OAuth 액세스 토큰 생성용 32 bytes.
+
+## 사용 패턴
+
+### API 핸들러에서
+
+```go
+func (h *Handler) GetTable(ctx *fiber.Ctx) error {
+    buf := pool.GetBuffer()
+    defer pool.PutBuffer(buf)  // 항상 반환!
+
+    encoder := json.NewEncoder(buf)
+    if err := encoder.Encode(table); err != nil {
+        return err
+    }
+
+    return ctx.Send(buf.Bytes())
+}
+```
+
+## 설정
+
+| 상수 | 값 | 설명 |
+|------|-----|------|
+| `DefaultBufferSize` | 4096 | 초기 버퍼 용량 (bytes) |
+| `MaxBufferSize` | 65536 | 폐기 전 최대 버퍼 크기 |
+| `TokenSize` | 32 | 토큰 byte slice 고정 크기 |
+
+## 모범 사례
+
+### 항상 `defer` 사용
+
+```go
+buf := pool.GetBuffer()
+defer pool.PutBuffer(buf)  // 반환 보장
+```
+
+### 참조 유지하지 않기
+
+```go
+// 잘못됨: 참조가 이스케이프
+data := buf.Bytes()
+pool.PutBuffer(buf)
+return data  // data가 이제 유효하지 않음!
+
+// 올바름: 필요시 복사
+data := make([]byte, buf.Len())
+copy(data, buf.Bytes())
+pool.PutBuffer(buf)
+return data
+```
+
+## 메트릭
+
+풀 성능은 Prometheus를 통해 노출됩니다:
+
+| 메트릭 | 유형 | 설명 |
+|--------|------|------|
+| `bingsan_pool_gets_total` | Counter | 총 Get() 작업 |
+| `bingsan_pool_returns_total` | Counter | 총 Put() 작업 |
+| `bingsan_pool_discards_total` | Counter | 폐기된 과대 항목 |
+| `bingsan_pool_misses_total` | Counter | 새 할당 (풀 비어있음) |
+
+## 벤치마크
+
+```bash
+go test -bench=BenchmarkPool -benchmem ./tests/benchmark/...
+```
+
+예상 결과:
+
+| 벤치마크 | 시간 | 할당 |
+|----------|------|------|
+| BufferPool.Get/Put | ~50ns | 0 |
+| BufferPool.Concurrent | ~100ns | 0 |
+| BytePool.Get/Put | ~30ns | 0 |

@@ -1,0 +1,160 @@
+---
+title: Testing
+description: Running and writing tests
+---
+
+# Testing
+
+Bingsan has a comprehensive test suite including unit, integration, and benchmark tests.
+
+## Running Tests
+
+```bash
+# Run all tests
+make test
+
+# Run with verbose output
+go test -v ./...
+
+# Run specific package
+go test -v ./internal/api/handlers/...
+
+# Run specific test
+go test -v -run TestTableCreate ./tests/unit/...
+```
+
+## Test Structure
+
+```text
+tests/
+├── unit/           # Unit tests
+├── integration/    # Integration tests (require database)
+├── contract/       # API contract tests
+├── e2e/            # End-to-end tests
+├── benchmark/      # Performance benchmarks
+└── fixtures/       # Test data and SQL fixtures
+```
+
+## Unit Tests
+
+Unit tests are located alongside the code or in `tests/unit/`:
+
+```bash
+# Run unit tests only
+go test -v ./internal/...
+```
+
+## Integration Tests
+
+Integration tests require a running PostgreSQL instance:
+
+```bash
+# Start dependencies
+make docker-up
+
+# Run integration tests
+make test-integration
+```
+
+Integration tests use the `integration` build tag:
+
+```go
+//go:build integration
+
+package integration
+
+func TestDatabaseOperations(t *testing.T) {
+    // ...
+}
+```
+
+## Contract Tests
+
+Contract tests verify API compliance with the Iceberg REST spec:
+
+```bash
+go test -v ./tests/contract/...
+```
+
+## Writing Tests
+
+### Test Naming
+
+```go
+func TestFeature_Scenario_ExpectedBehavior(t *testing.T) {
+    // Example: TestTableCreate_WithValidInput_ReturnsCreatedTable
+}
+```
+
+### Table-Driven Tests
+
+```go
+func TestValidation(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        wantErr bool
+    }{
+        {"valid input", "test", false},
+        {"empty input", "", true},
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := Validate(tt.input)
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+            }
+        })
+    }
+}
+```
+
+### Test Fixtures
+
+Use SQL fixtures for database tests:
+
+```bash
+tests/fixtures/
+├── namespaces.sql
+├── tables.sql
+└── cleanup.sql
+```
+
+## Benchmarks
+
+```bash
+# Run all benchmarks
+make bench
+
+# Run specific benchmark
+go test -bench=BenchmarkTable -benchmem ./tests/benchmark/...
+
+# Compare before/after
+go test -bench=. ./tests/benchmark/... | tee before.txt
+# Make changes
+go test -bench=. ./tests/benchmark/... | tee after.txt
+benchstat before.txt after.txt
+```
+
+## Coverage
+
+```bash
+# Generate coverage report
+go test -coverprofile=coverage.out ./...
+
+# View in browser
+go tool cover -html=coverage.out
+
+# Check coverage percentage
+go tool cover -func=coverage.out
+```
+
+## CI Integration
+
+Tests run automatically on pull requests via GitHub Actions. The CI pipeline:
+
+1. Runs linters (golangci-lint)
+2. Runs unit tests
+3. Runs integration tests with PostgreSQL service
+4. Reports coverage

@@ -1,0 +1,167 @@
+---
+title: Distributed Locking
+description: PostgreSQL-based locking with retry logic
+---
+
+# Distributed Locking
+
+Bingsan uses PostgreSQL row-level locking with configurable timeouts and retry logic to handle concurrent modifications safely across multiple instances.
+
+## Overview
+
+When multiple Bingsan instances modify the same resource simultaneously, locking ensures:
+
+- **Consistency**: Only one operation modifies a resource at a time
+- **Isolation**: Operations don't see partial states
+- **Automatic Recovery**: Failed locks are retried with backoff
+
+## Configuration
+
+Configure locking via `config.yaml`:
+
+```yaml
+catalog:
+  lock_timeout: 30s
+  lock_retry_interval: 100ms
+  max_lock_retries: 100
+```
+
+### Environment Variables
+
+```bash
+ICEBERG_CATALOG_LOCK_TIMEOUT=30s
+ICEBERG_CATALOG_LOCK_RETRY_INTERVAL=100ms
+ICEBERG_CATALOG_MAX_LOCK_RETRIES=100
+```
+
+## How It Works
+
+### Lock Acquisition Flow
+
+1. Begin Transaction
+2. SET LOCAL lock_timeout = '30s'
+3. Execute operation (SELECT ... FOR UPDATE)
+4. On Success: Commit Transaction
+5. On Lock Timeout (55P03): Rollback, wait retry_interval, retry
+6. If max_retries exceeded: Return ErrLockTimeout
+
+### PostgreSQL Lock Timeout
+
+Each transaction sets `lock_timeout` locally:
+
+```sql
+BEGIN;
+SET LOCAL lock_timeout = '30000ms';
+SELECT * FROM tables WHERE id = $1 FOR UPDATE;
+-- ... perform update ...
+COMMIT;
+```
+
+## Configuration Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `lock_timeout` | 30s | Max time to wait for a single lock attempt |
+| `lock_retry_interval` | 100ms | Wait time between retry attempts |
+| `max_lock_retries` | 100 | Maximum retry attempts before failing |
+
+### Total Wait Time
+
+```
+max_wait = lock_timeout + (max_lock_retries × lock_retry_interval)
+         = 30s + (100 × 100ms)
+         = 40s
+```
+
+## Tuning Guidelines
+
+### High Contention Workloads
+
+```yaml
+catalog:
+  lock_timeout: 5s
+  lock_retry_interval: 50ms
+  max_lock_retries: 200
+```
+
+### Low Contention Workloads
+
+```yaml
+catalog:
+  lock_timeout: 60s
+  lock_retry_interval: 500ms
+  max_lock_retries: 10
+```
+
+### Batch Processing
+
+```yaml
+catalog:
+  lock_timeout: 120s
+  lock_retry_interval: 1s
+  max_lock_retries: 60
+```
+
+## Error Handling
+
+### ErrLockTimeout
+
+Returned when all retries are exhausted. Client should retry the operation.
+
+### Serialization Failures
+
+PostgreSQL serialization errors (40001) are also detected and handled.
+
+## Monitoring
+
+### Lock Wait Metrics
+
+Monitor lock contention via PostgreSQL:
+
+```sql
+-- Active locks
+SELECT * FROM pg_locks WHERE NOT granted;
+
+-- Lock wait statistics
+SELECT * FROM pg_stat_activity
+WHERE wait_event_type = 'Lock';
+```
+
+### Application Metrics
+
+```text
+# Lock timeout errors
+rate(iceberg_handler_errors_total{error="lock_timeout"}[5m])
+```
+
+## Best Practices
+
+### Keep Transactions Short
+
+```go
+// Good: Minimal work inside lock
+err := db.WithLock(ctx, cfg, func(tx pgx.Tx) error {
+    return tx.Exec(ctx, "UPDATE tables SET ...")
+})
+
+// Bad: External calls inside lock
+err := db.WithLock(ctx, cfg, func(tx pgx.Tx) error {
+    callExternalService()  // May be slow!
+    return tx.Exec(ctx, "UPDATE tables SET ...")
+})
+```
+
+## Troubleshooting
+
+### Frequent Lock Timeouts
+
+**Causes**:
+- High write contention on same tables
+- Long-running transactions holding locks
+- Database performance issues
+
+**Solutions**:
+1. Increase `max_lock_retries`
+2. Decrease `lock_timeout` (fail faster, retry sooner)
+3. Check for slow queries holding locks
+4. Partition workloads across different tables

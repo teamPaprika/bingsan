@@ -1,0 +1,10 @@
+{
+  "title": "Configuration",
+  "pages": [
+    "index",
+    "server",
+    "database",
+    "storage",
+    "auth"
+  ]
+}

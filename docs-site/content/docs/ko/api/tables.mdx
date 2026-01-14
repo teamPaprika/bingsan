@@ -1,0 +1,355 @@
+---
+title: 테이블 API
+description: CRUD 및 커밋을 포함한 테이블 관리 작업
+---
+
+# 테이블 API
+
+테이블은 Iceberg의 주요 데이터 컨테이너로, 스키마, 파티션 사양 및 메타데이터를 포함합니다.
+
+## 테이블 목록 조회
+
+네임스페이스의 모든 테이블을 조회합니다.
+
+### 요청
+
+```http
+GET /v1/namespaces/{namespace}/tables
+GET /v1/namespaces/{namespace}/tables?pageToken={token}&pageSize={size}
+```
+
+### 쿼리 파라미터
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|-----------|------|----------|-------------|
+| `pageToken` | string | 아니오 | 페이지네이션 토큰 |
+| `pageSize` | integer | 아니오 | 최대 결과 수 (기본값: 100) |
+
+### 응답
+
+```json
+{
+  "identifiers": [
+    {"namespace": ["analytics"], "name": "user_events"},
+    {"namespace": ["analytics"], "name": "page_views"}
+  ],
+  "next-page-token": null
+}
+```
+
+### 예시
+
+```bash
+curl http://localhost:8181/v1/namespaces/analytics/tables
+```
+
+---
+
+## 테이블 생성
+
+새 Iceberg 테이블을 생성합니다.
+
+### 요청
+
+```http
+POST /v1/namespaces/{namespace}/tables
+```
+
+### 요청 본문
+
+```json
+{
+  "name": "user_events",
+  "location": "s3://bucket/warehouse/analytics/user_events",
+  "schema": {
+    "type": "struct",
+    "schema-id": 0,
+    "fields": [
+      {"id": 1, "name": "event_id", "required": true, "type": "string"},
+      {"id": 2, "name": "user_id", "required": true, "type": "long"},
+      {"id": 3, "name": "event_type", "required": true, "type": "string"},
+      {"id": 4, "name": "event_time", "required": true, "type": "timestamptz"}
+    ]
+  },
+  "partition-spec": {
+    "spec-id": 0,
+    "fields": [
+      {"source-id": 4, "field-id": 1000, "name": "event_day", "transform": "day"}
+    ]
+  },
+  "properties": {
+    "format-version": "2",
+    "write.parquet.compression-codec": "zstd"
+  }
+}
+```
+
+### 요청 필드
+
+| 필드 | 타입 | 필수 | 설명 |
+|-------|------|----------|-------------|
+| `name` | string | 예 | 테이블 이름 |
+| `location` | string | 아니오 | 사용자 정의 테이블 위치 (생략 시 웨어하우스 기본값 사용) |
+| `schema` | object | 예 | Iceberg 스키마 정의 |
+| `partition-spec` | object | 아니오 | 파티션 사양 |
+| `write-order` | object | 아니오 | 쓰기용 정렬 순서 |
+| `stage-create` | boolean | 아니오 | true인 경우 스테이지된 테이블 생성 (데이터 파일 없음) |
+| `properties` | object | 아니오 | 테이블 속성 |
+
+### 응답
+
+전체 테이블 메타데이터를 반환합니다:
+
+```json
+{
+  "metadata-location": "s3://bucket/warehouse/analytics/user_events/metadata/00000-uuid.metadata.json",
+  "metadata": {
+    "format-version": 2,
+    "table-uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "location": "s3://bucket/warehouse/analytics/user_events",
+    "last-updated-ms": 1705312200000,
+    "schema": { "..." },
+    "current-schema-id": 0,
+    "partition-spec": [],
+    "properties": {}
+  }
+}
+```
+
+### 예시
+
+```bash
+curl -X POST http://localhost:8181/v1/namespaces/analytics/tables \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "events",
+    "schema": {
+      "type": "struct",
+      "schema-id": 0,
+      "fields": [
+        {"id": 1, "name": "id", "required": true, "type": "long"},
+        {"id": 2, "name": "data", "required": false, "type": "string"}
+      ]
+    }
+  }'
+```
+
+---
+
+## 테이블 로드
+
+테이블의 현재 메타데이터를 로드합니다.
+
+### 요청
+
+```http
+GET /v1/namespaces/{namespace}/tables/{table}
+GET /v1/namespaces/{namespace}/tables/{table}?snapshots={snapshots}
+```
+
+### 쿼리 파라미터
+
+| 파라미터 | 타입 | 설명 |
+|-----------|------|-------------|
+| `snapshots` | string | 모든 스냅샷 포함은 `all`, 참조된 것만은 `refs` |
+
+### 응답
+
+```json
+{
+  "metadata-location": "s3://bucket/warehouse/analytics/events/metadata/00001-uuid.metadata.json",
+  "metadata": {
+    "format-version": 2,
+    "table-uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "location": "s3://bucket/warehouse/analytics/events",
+    "current-snapshot-id": 123456789,
+    "snapshots": [
+      {
+        "snapshot-id": 123456789,
+        "timestamp-ms": 1705312200000,
+        "summary": {
+          "operation": "append",
+          "added-data-files": "10",
+          "added-records": "1000"
+        }
+      }
+    ]
+  }
+}
+```
+
+### 예시
+
+```bash
+curl http://localhost:8181/v1/namespaces/analytics/tables/events
+```
+
+---
+
+## 테이블 존재 확인
+
+테이블이 존재하는지 확인합니다.
+
+### 요청
+
+```http
+HEAD /v1/namespaces/{namespace}/tables/{table}
+```
+
+### 응답
+
+- **200 OK**: 테이블 존재
+- **404 Not Found**: 테이블이 존재하지 않음
+
+### 예시
+
+```bash
+curl -I http://localhost:8181/v1/namespaces/analytics/tables/events
+```
+
+---
+
+## 테이블 업데이트 커밋
+
+테이블에 업데이트를 커밋합니다 (스키마 변경, 새 스냅샷, 속성 업데이트).
+
+### 요청
+
+```http
+POST /v1/namespaces/{namespace}/tables/{table}
+```
+
+### 요구사항
+
+| 타입 | 필드 | 설명 |
+|------|--------|-------------|
+| `assert-create` | - | 테이블이 존재하지 않음을 확인 |
+| `assert-table-uuid` | `uuid` | 테이블 UUID가 일치하는지 확인 |
+| `assert-ref-snapshot-id` | `ref`, `snapshot-id` | ref가 스냅샷을 가리키는지 확인 |
+| `assert-current-schema-id` | `current-schema-id` | 현재 스키마 ID 확인 |
+| `assert-default-spec-id` | `default-spec-id` | 기본 파티션 사양 확인 |
+
+### 업데이트 액션
+
+| 액션 | 필드 | 설명 |
+|--------|--------|-------------|
+| `upgrade-format-version` | `format-version` | 포맷 버전 업그레이드 |
+| `add-schema` | `schema` | 새 스키마 추가 |
+| `set-current-schema` | `schema-id` | 현재 스키마 설정 |
+| `add-partition-spec` | `spec` | 파티션 사양 추가 |
+| `set-default-spec` | `spec-id` | 기본 파티션 사양 설정 |
+| `add-snapshot` | `snapshot` | 스냅샷 추가 |
+| `set-snapshot-ref` | `ref-name`, `type`, `snapshot-id` | 스냅샷 참조 설정 |
+| `remove-snapshots` | `snapshot-ids` | 스냅샷 제거 |
+| `set-properties` | `updates` | 속성 업데이트 |
+| `remove-properties` | `removals` | 속성 제거 |
+
+### 오류
+
+| 코드 | 오류 | 설명 |
+|------|-------|-------------|
+| 404 | `NoSuchTableException` | 테이블을 찾을 수 없음 |
+| 409 | `CommitFailedException` | 요구사항이 충족되지 않음 |
+
+---
+
+## 테이블 삭제
+
+테이블을 삭제합니다.
+
+### 요청
+
+```http
+DELETE /v1/namespaces/{namespace}/tables/{table}
+DELETE /v1/namespaces/{namespace}/tables/{table}?purgeRequested={true|false}
+```
+
+### 쿼리 파라미터
+
+| 파라미터 | 타입 | 설명 |
+|-----------|------|-------------|
+| `purgeRequested` | boolean | true인 경우 데이터 파일 삭제 (기본값: false) |
+
+### 응답
+
+- **204 No Content**: 테이블 삭제됨
+
+### 예시
+
+```bash
+# 테이블 삭제, 데이터 파일 유지
+curl -X DELETE http://localhost:8181/v1/namespaces/analytics/tables/events
+
+# 테이블 삭제 및 데이터 퍼지
+curl -X DELETE "http://localhost:8181/v1/namespaces/analytics/tables/events?purgeRequested=true"
+```
+
+---
+
+## 테이블 등록
+
+메타데이터 파일에서 기존 테이블을 등록합니다.
+
+### 요청
+
+```http
+POST /v1/namespaces/{namespace}/register
+```
+
+### 요청 본문
+
+```json
+{
+  "name": "imported_table",
+  "metadata-location": "s3://bucket/path/to/metadata.json"
+}
+```
+
+### 예시
+
+```bash
+curl -X POST http://localhost:8181/v1/namespaces/analytics/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "imported",
+    "metadata-location": "s3://bucket/tables/imported/metadata/00000.metadata.json"
+  }'
+```
+
+---
+
+## 테이블 이름 변경
+
+테이블의 이름을 변경하거나 다른 네임스페이스로 이동합니다.
+
+### 요청
+
+```http
+POST /v1/tables/rename
+```
+
+### 요청 본문
+
+```json
+{
+  "source": {
+    "namespace": ["analytics"],
+    "name": "old_name"
+  },
+  "destination": {
+    "namespace": ["analytics"],
+    "name": "new_name"
+  }
+}
+```
+
+### 예시
+
+```bash
+curl -X POST http://localhost:8181/v1/tables/rename \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": {"namespace": ["analytics"], "name": "events"},
+    "destination": {"namespace": ["analytics"], "name": "user_events"}
+  }'
+```

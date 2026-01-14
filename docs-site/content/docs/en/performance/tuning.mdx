@@ -1,0 +1,214 @@
+---
+title: Tuning
+description: Performance tuning guidelines for Bingsan
+---
+
+# Performance Tuning
+
+This guide covers how to tune Bingsan for optimal performance based on your workload characteristics.
+
+## Quick Reference
+
+| Workload | Lock Timeout | Retry Interval | Max Retries | Buffer Size |
+|----------|--------------|----------------|-------------|-------------|
+| Low latency | 5s | 50ms | 20 | 4KB |
+| High throughput | 30s | 100ms | 100 | 4KB |
+| Large schemas | 30s | 100ms | 100 | 8-16KB |
+| Batch processing | 120s | 1s | 60 | 4KB |
+
+## Workload Profiles
+
+### Low Latency
+
+Prioritize fast responses over throughput:
+
+```yaml
+catalog:
+  lock_timeout: 5s
+  lock_retry_interval: 50ms
+  max_lock_retries: 20
+
+server:
+  read_timeout: 10s
+  write_timeout: 10s
+
+database:
+  max_open_conns: 50
+  max_idle_conns: 25
+```
+
+### High Throughput
+
+Maximize requests per second:
+
+```yaml
+catalog:
+  lock_timeout: 30s
+  lock_retry_interval: 100ms
+  max_lock_retries: 100
+
+server:
+  read_timeout: 60s
+  write_timeout: 60s
+  idle_timeout: 300s
+
+database:
+  max_open_conns: 100
+  max_idle_conns: 50
+  conn_max_lifetime: 30m
+```
+
+### Batch Processing
+
+For bulk operations:
+
+```yaml
+catalog:
+  lock_timeout: 120s
+  lock_retry_interval: 1s
+  max_lock_retries: 60
+
+server:
+  read_timeout: 300s
+  write_timeout: 300s
+
+database:
+  max_open_conns: 25
+  conn_max_lifetime: 60m
+```
+
+## Tuning by Symptom
+
+### High Latency
+
+**Diagnosis:**
+```text
+# Check lock wait time
+rate(iceberg_db_wait_duration_seconds_total[5m])
+
+# Check pool discard rate
+rate(bingsan_pool_discards_total[5m])
+
+# Check connection saturation
+iceberg_db_connections_in_use / iceberg_db_connections_max
+```
+
+**Solutions:**
+1. Lock contention - Reduce `lock_timeout`, increase `max_lock_retries`
+2. Pool discards - Increase `MaxBufferSize` for large schemas
+3. Connection pool - Increase `max_open_conns`
+
+### High Memory Usage
+
+**Diagnosis:**
+```bash
+curl http://localhost:8181/debug/pprof/heap > heap.prof
+go tool pprof heap.prof
+```
+
+**Solutions:**
+1. Buffer leaks - Check all code paths return buffers
+2. Large buffers - Reduce `MaxBufferSize`
+3. Connection bloat - Reduce `max_open_conns`
+
+### Lock Timeout Errors
+
+**Diagnosis:**
+```sql
+SELECT * FROM pg_locks WHERE NOT granted;
+SELECT * FROM pg_stat_activity WHERE wait_event_type = 'Lock';
+```
+
+**Solutions:**
+1. High contention - Increase `max_lock_retries`
+2. Slow transactions - Keep transactions short
+3. Deadlocks - Bingsan handles these automatically
+
+## Database Tuning
+
+### PostgreSQL Settings
+
+```sql
+ALTER SYSTEM SET max_connections = 500;
+ALTER SYSTEM SET lock_timeout = '30s';
+ALTER SYSTEM SET statement_timeout = '60s';
+ALTER SYSTEM SET effective_cache_size = '12GB';
+ALTER SYSTEM SET shared_buffers = '4GB';
+```
+
+### Connection Pooling with PgBouncer
+
+```ini
+[databases]
+iceberg_catalog = host=postgres port=5432 dbname=iceberg_catalog
+
+[pgbouncer]
+pool_mode = transaction
+max_client_conn = 1000
+default_pool_size = 50
+```
+
+## Resource Sizing
+
+### Memory
+
+```
+memory_per_instance = base + (concurrent_requests × request_memory)
+                   ≈ 50MB + (500 × 100KB)
+                   ≈ 100MB typical
+                   ≈ 200MB peak
+```
+
+### CPU
+
+```
+cpu_per_instance ≈ 0.2 cores idle
+                 ≈ 1 core under load
+```
+
+### Instances
+
+```
+instances = (peak_rps / rps_per_instance) × 1.5
+```
+
+## Profiling
+
+### CPU Profile
+
+```bash
+curl http://localhost:8181/debug/pprof/profile?seconds=30 > cpu.prof
+go tool pprof -http=:8080 cpu.prof
+```
+
+### Memory Profile
+
+```bash
+curl http://localhost:8181/debug/pprof/heap > heap.prof
+go tool pprof -http=:8080 heap.prof
+```
+
+### Trace
+
+```bash
+curl http://localhost:8181/debug/pprof/trace?seconds=5 > trace.out
+go tool trace trace.out
+```
+
+## Checklist
+
+### Pre-Production
+
+- [ ] Set appropriate `lock_timeout` for your workload
+- [ ] Configure `max_open_conns` based on expected load
+- [ ] Enable Prometheus metrics collection
+- [ ] Set up alerting for pool health
+- [ ] Run load tests with realistic data
+
+### Production Monitoring
+
+- [ ] Pool hit rate > 80%
+- [ ] Pool discard rate < 1%
+- [ ] Lock timeout rate < 1%
+- [ ] Connection utilization < 90%
+- [ ] GC pause p99 < 10ms

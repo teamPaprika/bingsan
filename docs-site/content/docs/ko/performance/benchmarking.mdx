@@ -1,0 +1,180 @@
+---
+title: 벤치마킹
+description: Go 벤치마크와 Apache Polaris Tools를 사용한 부하 테스트
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# 벤치마킹
+
+Bingsan은 Go 내장 벤치마크와 Apache Polaris Tools Gatling 프레임워크를 사용한 포괄적인 벤치마킹을 지원합니다.
+
+## 빠른 시작
+
+### Go 벤치마크
+
+```bash
+# 모든 벤치마크
+go test -bench=. -benchmem ./tests/benchmark/...
+
+# 특정 벤치마크
+go test -bench=BenchmarkTable -benchmem ./tests/benchmark/...
+
+# 풀 벤치마크
+go test -bench=BenchmarkPool -benchmem ./tests/benchmark/...
+```
+
+### Polaris Tools를 사용한 부하 테스트
+
+```bash
+cd benchmarks
+
+# 일회성 설정
+make setup
+
+# OAuth2로 Bingsan 시작
+make start-bingsan
+
+# 테스트 데이터셋 생성
+make create-dataset
+
+# 읽기 벤치마크 실행
+make read-benchmark
+
+# 결과 보기
+make report
+```
+
+## Go 벤치마크
+
+### 사용 가능한 벤치마크
+
+| 벤치마크 | 설명 |
+|----------|------|
+| `BenchmarkBaseline` | 풀링 없는 기준선 |
+| `BenchmarkPool` | 오브젝트 풀링 사용 |
+| `BenchmarkTable` | 테이블 작업 |
+| `BenchmarkNamespace` | 네임스페이스 작업 |
+| `BenchmarkConcurrent` | 동시 부하 |
+| `BenchmarkMemory` | 메모리 할당 |
+
+### 전후 비교
+
+```bash
+# 기준선
+go test -bench=. -benchmem ./tests/benchmark/... | tee baseline.txt
+
+# 변경 후
+go test -bench=. -benchmem ./tests/benchmark/... | tee optimized.txt
+
+# 비교
+benchstat baseline.txt optimized.txt
+```
+
+### 프로파일링과 함께
+
+```bash
+# CPU 프로파일
+go test -bench=BenchmarkTable -cpuprofile=cpu.prof ./tests/benchmark/...
+go tool pprof cpu.prof
+
+# 메모리 프로파일
+go test -bench=BenchmarkTable -memprofile=mem.prof ./tests/benchmark/...
+go tool pprof mem.prof
+```
+
+### 예상 결과
+
+| 벤치마크 | 작업/초 | ns/op | B/op | allocs/op |
+|----------|---------|-------|------|-----------|
+| TableMetadata | 100,000+ | &lt;10,000 | &lt;5,000 | &lt;50 |
+| LargeSchema | 10,000+ | &lt;100,000 | &lt;50,000 | &lt;200 |
+| PoolGet/Put | 20,000,000+ | &lt;50 | 0 | 0 |
+
+## Polaris Tools 부하 테스트
+
+### 전제조건
+
+- **Java 17+** - Gatling에 필요
+- **Docker & Docker Compose** - Bingsan 실행용
+- **Make** - 벤치마크 명령 실행용
+
+### 설정
+
+```bash
+cd benchmarks
+make setup
+```
+
+### 벤치마크 실행
+
+| 명령 | 설명 |
+|------|------|
+| `make read-benchmark` | 읽기 전용 작업 |
+| `make read-update-benchmark` | 혼합 읽기/쓰기 (80/20) |
+| `make create-commits-benchmark` | 커밋 처리량 |
+| `make weighted-benchmark` | 가중치 워크로드 시뮬레이션 |
+| `make full-benchmark` | 모든 벤치마크 순차 실행 |
+
+### 설정
+
+`config/bingsan.conf` 편집:
+
+```text
+http.base-url = "http://localhost:8181"
+
+auth.client-id = "benchmark-client"
+auth.client-secret = "benchmark-secret"
+
+dataset {
+  namespace-width = 2
+  namespace-depth = 3
+  tables-per-namespace = 5
+  views-per-namespace = 3
+}
+
+workload.read-update-tree-dataset {
+  read-write-ratio = 0.8
+  throughput = "50/sec"
+  duration-in-minutes = 3
+}
+```
+
+## Polaris 호환 모드
+
+<Callout type="warn">
+**프로덕션 경고**: 프로덕션에서는 `polaris_enabled: false`를 유지하세요. 이 모드는 벤치마크 호환성만을 위한 것입니다.
+</Callout>
+
+Polaris Tools는 Polaris 호환 API를 기대합니다. 다음을 통해 활성화:
+
+```yaml
+compat:
+  polaris_enabled: true
+```
+
+## CI/CD 통합
+
+### GitHub Actions 예시
+
+```yaml
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: 벤치마크 실행
+        run: |
+          go test -bench=. -benchmem ./tests/benchmark/... | tee results.txt
+      - name: 기준선과 비교
+        run: benchstat baseline.txt results.txt
+```

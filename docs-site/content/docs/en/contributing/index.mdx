@@ -1,0 +1,93 @@
+---
+title: Contributing
+description: How to contribute to Bingsan
+---
+
+# Contributing to Bingsan
+
+Thank you for your interest in contributing to Bingsan! This guide will help you get started.
+
+## Getting Started
+
+1. Fork the repository on GitHub
+2. Clone your fork locally
+3. Set up the development environment
+4. Create a feature branch
+5. Make your changes
+6. Submit a pull request
+
+## Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/bingsan.git
+cd bingsan
+
+# Install dependencies
+go mod download
+
+# Install development tools
+make install-tools
+
+# Copy configuration
+cp config.example.yaml config.yaml
+
+# Start dependencies
+make docker-up
+
+# Run the server
+make dev
+```
+
+## Project Structure
+
+```text
+bingsan/
+├── cmd/iceberg-catalog/    # Application entry point
+├── internal/
+│   ├── api/                # HTTP handlers and middleware
+│   ├── db/                 # Database layer and migrations
+│   ├── events/             # Event streaming
+│   ├── pool/               # Object pooling
+│   ├── config/             # Configuration
+│   └── metrics/            # Prometheus metrics
+├── tests/                  # Test suites
+├── deployments/            # Docker and K8s configs
+└── docs/                   # Documentation
+```
+
+## Contribution Types
+
+### Bug Reports
+
+- Search existing issues first
+- Include reproduction steps
+- Provide environment details
+- Attach relevant logs
+
+### Feature Requests
+
+- Check the roadmap and existing issues
+- Describe the use case
+- Propose a solution if possible
+
+### Code Contributions
+
+- Follow the [code style guide](/docs/contributing/code-style)
+- Write tests for new functionality
+- Update documentation as needed
+- Keep commits focused and well-described
+
+## Pull Request Process
+
+1. Update the README or docs if needed
+2. Ensure all tests pass
+3. Update the CHANGELOG if applicable
+4. Request review from maintainers
+5. Address review feedback promptly
+
+## Communication
+
+- GitHub Issues for bugs and features
+- GitHub Discussions for questions
+- Pull Request comments for code review

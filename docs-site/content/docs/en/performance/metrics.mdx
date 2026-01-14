@@ -1,0 +1,178 @@
+---
+title: Metrics
+description: Prometheus metrics for monitoring Bingsan performance
+---
+
+# Performance Metrics
+
+Bingsan exposes performance metrics via Prometheus at the `/metrics` endpoint.
+
+## Pool Metrics
+
+Object pool utilization metrics help monitor memory efficiency.
+
+### bingsan_pool_gets_total
+
+**Type**: Counter
+**Labels**: `pool`
+
+Total number of `Get()` operations on the pool.
+
+```text
+# Get rate per pool
+rate(bingsan_pool_gets_total[5m])
+
+# Total gets by pool type
+sum by (pool) (bingsan_pool_gets_total)
+```
+
+### bingsan_pool_returns_total
+
+**Type**: Counter
+**Labels**: `pool`
+
+Total number of successful `Put()` operations returning items to the pool.
+
+```text
+# Pool efficiency (returns/gets)
+rate(bingsan_pool_returns_total{pool="buffer"}[5m])
+/ rate(bingsan_pool_gets_total{pool="buffer"}[5m])
+```
+
+### bingsan_pool_discards_total
+
+**Type**: Counter
+**Labels**: `pool`
+
+Total number of discarded items (oversized or invalid).
+
+```text
+# Discard percentage
+rate(bingsan_pool_discards_total{pool="buffer"}[5m])
+/ rate(bingsan_pool_gets_total{pool="buffer"}[5m]) * 100
+```
+
+### bingsan_pool_misses_total
+
+**Type**: Counter
+**Labels**: `pool`
+
+Total number of pool misses requiring new allocations.
+
+```text
+# Hit rate (estimated)
+1 - (rate(bingsan_pool_misses_total[5m]) / rate(bingsan_pool_gets_total[5m]))
+```
+
+## Pool Labels
+
+| Label | Values | Description |
+|-------|--------|-------------|
+| `pool` | `buffer`, `bytes` | Pool type identifier |
+
+## Alerting Rules
+
+### Low Pool Hit Rate
+
+```yaml
+- alert: LowPoolHitRate
+  expr: |
+    (rate(bingsan_pool_returns_total{pool="buffer"}[5m])
+     / rate(bingsan_pool_gets_total{pool="buffer"}[5m])) < 0.8
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Pool hit rate below 80%"
+```
+
+### High Discard Rate
+
+```yaml
+- alert: HighPoolDiscardRate
+  expr: rate(bingsan_pool_discards_total{pool="buffer"}[5m]) > 10
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "High pool discard rate"
+```
+
+## Recording Rules
+
+Pre-compute expensive queries:
+
+```yaml
+groups:
+  - name: bingsan_pool_recording
+    interval: 30s
+    rules:
+      - record: bingsan:pool_hit_rate:5m
+        expr: |
+          rate(bingsan_pool_returns_total[5m])
+          / rate(bingsan_pool_gets_total[5m])
+
+      - record: bingsan:pool_discard_rate:5m
+        expr: rate(bingsan_pool_discards_total[5m])
+```
+
+## Interpreting Metrics
+
+### Healthy Pool
+
+```
+gets_total:    1,000,000
+returns_total: 1,000,000
+discards_total:        50
+misses_total:         100
+
+Utilization: 100% (returns = gets)
+Discard rate: 0.005%
+Miss rate: 0.01%
+```
+
+### Pool with Leaks
+
+```
+gets_total:    1,000,000
+returns_total:   800,000  ← 200,000 missing!
+discards_total:       100
+misses_total:     200,100  ← High misses
+
+Utilization: 80%
+Miss rate: 20%
+```
+
+**Action**: Check for missing `defer pool.Put()` calls.
+
+### Pool with Large Responses
+
+```
+gets_total:    1,000,000
+returns_total:   700,000
+discards_total:  300,000  ← High discards!
+misses_total:         50
+
+Utilization: 70%
+Discard rate: 30%
+```
+
+**Action**: Consider increasing `MaxBufferSize` if schemas are large.
+
+## Health Check Endpoints
+
+### /health
+
+Basic health check (returns 200 if healthy):
+
+```bash
+curl http://localhost:8181/health
+```
+
+### /metrics
+
+Prometheus metrics endpoint:
+
+```bash
+curl http://localhost:8181/metrics | grep bingsan_pool
+```

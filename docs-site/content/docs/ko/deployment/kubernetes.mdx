@@ -1,0 +1,225 @@
+---
+title: Kubernetes
+description: 프로덕션을 위한 Kubernetes 배포
+---
+
+# Kubernetes 배포
+
+프로덕션 워크로드를 위해 Kubernetes에 Bingsan을 배포합니다.
+
+## 전제조건
+
+- Kubernetes 1.24+
+- kubectl 구성 완료
+- PostgreSQL 데이터베이스 (관리형 또는 자체 호스팅)
+- 오브젝트 스토리지 (S3/GCS)
+
+## 빠른 시작
+
+### 1. 네임스페이스 생성
+
+```bash
+kubectl create namespace bingsan
+```
+
+### 2. Secrets 생성
+
+```bash
+# 데이터베이스 자격 증명
+kubectl create secret generic bingsan-db \
+  --namespace bingsan \
+  --from-literal=host=postgres.example.com \
+  --from-literal=port=5432 \
+  --from-literal=user=iceberg \
+  --from-literal=password=your-password \
+  --from-literal=database=iceberg_catalog
+
+# S3 자격 증명 (정적 자격 증명 사용 시)
+kubectl create secret generic bingsan-s3 \
+  --namespace bingsan \
+  --from-literal=access-key-id=AKIA... \
+  --from-literal=secret-access-key=...
+```
+
+### 3. ConfigMap 생성
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bingsan-config
+  namespace: bingsan
+data:
+  config.yaml: |
+    server:
+      host: 0.0.0.0
+      port: 8181
+      debug: false
+
+    storage:
+      type: s3
+      warehouse: s3://your-bucket/warehouse
+      s3:
+        region: us-east-1
+        bucket: your-bucket
+
+    catalog:
+      lock_timeout: 30s
+```
+
+### 4. 배포
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bingsan
+  namespace: bingsan
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: bingsan
+  template:
+    metadata:
+      labels:
+        app: bingsan
+    spec:
+      containers:
+      - name: bingsan
+        image: ghcr.io/kimuyb/bingsan:latest
+        ports:
+        - containerPort: 8181
+          name: http
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+```
+
+## Service
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: bingsan
+  namespace: bingsan
+spec:
+  type: ClusterIP
+  selector:
+    app: bingsan
+  ports:
+  - port: 8181
+    targetPort: http
+    name: http
+```
+
+## HorizontalPodAutoscaler
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bingsan
+  namespace: bingsan
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bingsan
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+```
+
+## PodDisruptionBudget
+
+```yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: bingsan
+  namespace: bingsan
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: bingsan
+```
+
+## 클라우드 제공자 통합
+
+### AWS IAM Roles for Service Accounts (IRSA)
+
+정적 자격 증명 없이 AWS S3에 액세스하려면 IAM roles for service accounts를 사용하세요.
+
+### GCP Workload Identity
+
+GCS 액세스를 위해 GKE 클러스터에서 Workload Identity를 구성하세요.
+
+## 모니터링
+
+### ServiceMonitor (Prometheus Operator)
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: bingsan
+  namespace: bingsan
+spec:
+  selector:
+    matchLabels:
+      app: bingsan
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
+```
+
+## 트러블슈팅
+
+### Pod 상태 확인
+
+```bash
+kubectl get pods -n bingsan
+kubectl describe pod -n bingsan bingsan-xxx
+```
+
+### 로그 보기
+
+```bash
+kubectl logs -n bingsan -l app=bingsan --tail=100 -f
+```
+
+### 연결 테스트
+
+```bash
+# 로컬 테스트를 위한 포트 포워딩
+kubectl port-forward -n bingsan svc/bingsan 8181:8181
+
+# 헬스 테스트
+curl http://localhost:8181/health
+```

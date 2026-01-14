@@ -1,10 +1,18 @@
-# Bingsan
+<p align="center">
+  <img src="assets/bingsan-logo.png" alt="Bingsan" width="150">
+</p>
 
-[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/teamPaprika/bingsan)](https://goreportcard.com/report/github.com/teamPaprika/bingsan)
+<h1 align="center">Bingsan</h1>
 
-**High-performance Apache Iceberg REST Catalog in Go — 2-3x faster than alternatives**
+<p align="center">
+  <a href="https://golang.org"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go" alt="Go Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://goreportcard.com/report/github.com/teamPaprika/bingsan"><img src="https://goreportcard.com/badge/github.com/teamPaprika/bingsan" alt="Go Report Card"></a>
+</p>
+
+<p align="center">
+  <strong>High-performance Apache Iceberg REST Catalog in Go — 2-3x faster than alternatives</strong>
+</p>
 
 [한국어](#한국어) | [English](#english)
 

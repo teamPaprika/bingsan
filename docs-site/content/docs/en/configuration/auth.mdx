@@ -1,0 +1,155 @@
+---
+title: Authentication
+description: Configure authentication and authorization for Bingsan
+---
+
+# Authentication Configuration
+
+Configure authentication and authorization for the catalog API.
+
+## Options
+
+```yaml
+auth:
+  enabled: false
+  token_expiry: 1h
+  signing_key: "change-me-in-production"
+
+  oauth2:
+    enabled: false
+    issuer: ""
+    client_id: ""
+    client_secret: ""
+
+  api_key:
+    enabled: false
+```
+
+## Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable authentication |
+| `token_expiry` | duration | `1h` | Access token lifetime |
+| `signing_key` | string | - | Secret key for signing tokens |
+| `oauth2.enabled` | boolean | `false` | Enable OAuth2 endpoint |
+| `oauth2.issuer` | string | `""` | External OAuth issuer URL |
+| `api_key.enabled` | boolean | `false` | Enable API key authentication |
+
+## Enabling Authentication
+
+```yaml
+auth:
+  enabled: true
+  token_expiry: 1h
+  signing_key: "your-secure-256-bit-secret-key-here"
+```
+
+<Callout type="error">
+Always change the signing_key in production. Use a cryptographically secure random string.
+</Callout>
+
+Generate a secure key:
+
+```bash
+openssl rand -hex 32
+```
+
+## OAuth2 Token Exchange
+
+Enable the OAuth2 token endpoint for Iceberg clients:
+
+```yaml
+auth:
+  enabled: true
+  signing_key: "your-secure-key"
+
+  oauth2:
+    enabled: true
+```
+
+Clients exchange credentials for tokens:
+
+```bash
+curl -X POST http://localhost:8181/v1/oauth/tokens \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=my-client" \
+  -d "client_secret=my-secret"
+```
+
+Response:
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "bearer",
+  "expires_in": 3600
+}
+```
+
+## External OAuth Provider
+
+Use an external OAuth/OIDC provider:
+
+```yaml
+auth:
+  enabled: true
+
+  oauth2:
+    enabled: true
+    issuer: "https://your-idp.example.com"
+```
+
+### Supported Providers
+
+- **Auth0**: `issuer: "https://your-tenant.auth0.com/"`
+- **Okta**: `issuer: "https://your-org.okta.com"`
+- **Keycloak**: `issuer: "https://keycloak.example.com/realms/your-realm"`
+- **Azure AD**: `issuer: "https://login.microsoftonline.com/your-tenant/v2.0"`
+
+## Client Configuration
+
+### Apache Spark
+
+```properties
+spark.sql.catalog.bingsan=org.apache.iceberg.spark.SparkCatalog
+spark.sql.catalog.bingsan.type=rest
+spark.sql.catalog.bingsan.uri=http://localhost:8181
+spark.sql.catalog.bingsan.credential=client_id:client_secret
+```
+
+### PyIceberg
+
+```python
+from pyiceberg.catalog import load_catalog
+
+catalog = load_catalog(
+    "rest",
+    uri="http://localhost:8181",
+    credential="client_id:client_secret"
+)
+```
+
+### Trino
+
+```properties
+connector.name=iceberg
+iceberg.catalog.type=rest
+iceberg.rest-catalog.uri=http://localhost:8181
+iceberg.rest-catalog.security=OAUTH2
+iceberg.rest-catalog.oauth2.client-id=client_id
+iceberg.rest-catalog.oauth2.client-secret=client_secret
+```
+
+## Endpoints Without Authentication
+
+These endpoints never require authentication:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | Health check |
+| `GET /ready` | Readiness check |
+| `GET /metrics` | Prometheus metrics |
+| `GET /v1/config` | Catalog configuration |
+| `POST /v1/oauth/tokens` | Token exchange |

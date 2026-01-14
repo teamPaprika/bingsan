@@ -1,0 +1,23 @@
+---
+title: 연동
+description: Spark, Trino, PyIceberg 등과 Bingsan 연결하기
+---
+
+# 연동
+
+Bingsan은 표준 REST Catalog API를 통해 모든 주요 Iceberg 클라이언트와 연동됩니다.
+
+## 지원 클라이언트
+
+- [Apache Spark](/docs/integrations/spark) - 배치 및 스트리밍 데이터 처리
+- [Trino](/docs/integrations/trino) - 분산 SQL 쿼리 엔진
+- [PyIceberg](/docs/integrations/pyiceberg) - Iceberg용 Python 라이브러리
+
+## 연결 개요
+
+모든 클라이언트는 REST catalog 타입을 사용하여 연결합니다:
+
+```
+Catalog URI: http://localhost:8181
+Catalog Type: rest
+```

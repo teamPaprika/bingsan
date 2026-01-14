@@ -1,0 +1,225 @@
+---
+title: Kubernetes
+description: Deploy Bingsan on Kubernetes for production
+---
+
+# Kubernetes Deployment
+
+Deploy Bingsan on Kubernetes for production workloads.
+
+## Prerequisites
+
+- Kubernetes 1.24+
+- kubectl configured
+- PostgreSQL database (managed or self-hosted)
+- Object storage (S3/GCS)
+
+## Quick Start
+
+### 1. Create Namespace
+
+```bash
+kubectl create namespace bingsan
+```
+
+### 2. Create Secrets
+
+```bash
+# Database credentials
+kubectl create secret generic bingsan-db \
+  --namespace bingsan \
+  --from-literal=host=postgres.example.com \
+  --from-literal=port=5432 \
+  --from-literal=user=iceberg \
+  --from-literal=password=your-password \
+  --from-literal=database=iceberg_catalog
+
+# S3 credentials (if using static credentials)
+kubectl create secret generic bingsan-s3 \
+  --namespace bingsan \
+  --from-literal=access-key-id=AKIA... \
+  --from-literal=secret-access-key=...
+```
+
+### 3. Create ConfigMap
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bingsan-config
+  namespace: bingsan
+data:
+  config.yaml: |
+    server:
+      host: 0.0.0.0
+      port: 8181
+      debug: false
+
+    storage:
+      type: s3
+      warehouse: s3://your-bucket/warehouse
+      s3:
+        region: us-east-1
+        bucket: your-bucket
+
+    catalog:
+      lock_timeout: 30s
+```
+
+### 4. Deploy
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bingsan
+  namespace: bingsan
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: bingsan
+  template:
+    metadata:
+      labels:
+        app: bingsan
+    spec:
+      containers:
+      - name: bingsan
+        image: ghcr.io/kimuyb/bingsan:latest
+        ports:
+        - containerPort: 8181
+          name: http
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+```
+
+## Service
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: bingsan
+  namespace: bingsan
+spec:
+  type: ClusterIP
+  selector:
+    app: bingsan
+  ports:
+  - port: 8181
+    targetPort: http
+    name: http
+```
+
+## HorizontalPodAutoscaler
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bingsan
+  namespace: bingsan
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bingsan
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+```
+
+## PodDisruptionBudget
+
+```yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: bingsan
+  namespace: bingsan
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: bingsan
+```
+
+## Cloud Provider Integration
+
+### AWS IAM Roles for Service Accounts (IRSA)
+
+For AWS S3 access without static credentials, use IAM roles for service accounts.
+
+### GCP Workload Identity
+
+For GCS access, configure Workload Identity on your GKE cluster.
+
+## Monitoring
+
+### ServiceMonitor (Prometheus Operator)
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: bingsan
+  namespace: bingsan
+spec:
+  selector:
+    matchLabels:
+      app: bingsan
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
+```
+
+## Troubleshooting
+
+### Check Pod Status
+
+```bash
+kubectl get pods -n bingsan
+kubectl describe pod -n bingsan bingsan-xxx
+```
+
+### View Logs
+
+```bash
+kubectl logs -n bingsan -l app=bingsan --tail=100 -f
+```
+
+### Test Connectivity
+
+```bash
+# Port forward for local testing
+kubectl port-forward -n bingsan svc/bingsan 8181:8181
+
+# Test health
+curl http://localhost:8181/health
+```

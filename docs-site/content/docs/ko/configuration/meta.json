@@ -1,0 +1,10 @@
+{
+  "title": "설정",
+  "pages": [
+    "index",
+    "server",
+    "database",
+    "storage",
+    "auth"
+  ]
+}

@@ -1,0 +1,53 @@
+---
+title: 성능
+description: Bingsan 성능 최적화 및 튜닝
+---
+
+# 성능
+
+Bingsan은 최소한의 메모리 오버헤드로 높은 처리량의 메타데이터 작업에 최적화되어 있습니다.
+
+## 개요
+
+Bingsan은 여러 성능 최적화를 구현합니다:
+
+- **오브젝트 풀링** - GC 압력 감소를 위한 메모리 버퍼 재사용
+- **분산 잠금** - 설정 가능한 타임아웃이 있는 PostgreSQL 기반 잠금
+- **최적화된 직렬화** - 빠른 JSON 인코딩을 위해 goccy/go-json 사용
+
+## 성능 목표
+
+| 메트릭 | 목표 | 일반 |
+|--------|------|------|
+| 테이블 메타데이터 직렬화 | &lt;50ms | ~10us |
+| 대형 스키마 (100+ 컬럼) | &lt;200ms | ~90us |
+| 메모리 할당 감소 | &gt;=30% | 19-26% |
+| GC 일시정지 (p99) | &lt;10ms | &lt;5ms |
+| 풀 히트율 | &gt;=80% | ~100% |
+
+## 설정
+
+풀 및 잠금 설정은 `config.yaml`에서 구성합니다:
+
+```yaml
+catalog:
+  lock_timeout: 30s
+  lock_retry_interval: 100ms
+  max_lock_retries: 100
+```
+
+또는 환경 변수를 통해:
+
+```bash
+ICEBERG_CATALOG_LOCK_TIMEOUT=30s
+ICEBERG_CATALOG_LOCK_RETRY_INTERVAL=100ms
+ICEBERG_CATALOG_MAX_LOCK_RETRIES=100
+```
+
+## 섹션
+
+- [오브젝트 풀링](/docs/performance/pooling) - 할당 감소를 위한 메모리 버퍼 재사용
+- [분산 잠금](/docs/performance/locking) - 재시도 로직이 있는 PostgreSQL 기반 잠금
+- [벤치마킹](/docs/performance/benchmarking) - Apache Polaris Tools를 사용한 부하 테스트
+- [메트릭](/docs/performance/metrics) - 모니터링을 위한 Prometheus 메트릭
+- [튜닝](/docs/performance/tuning) - 성능 튜닝 가이드라인

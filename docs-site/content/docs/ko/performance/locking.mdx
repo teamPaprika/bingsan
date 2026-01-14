@@ -1,0 +1,160 @@
+---
+title: 분산 잠금
+description: 재시도 로직이 있는 PostgreSQL 기반 잠금
+---
+
+# 분산 잠금
+
+Bingsan은 설정 가능한 타임아웃과 재시도 로직이 있는 PostgreSQL 행 레벨 잠금을 사용하여 여러 인스턴스에서 동시 수정을 안전하게 처리합니다.
+
+## 개요
+
+여러 Bingsan 인스턴스가 동시에 같은 리소스를 수정할 때, 잠금은 다음을 보장합니다:
+
+- **일관성**: 한 번에 하나의 작업만 리소스 수정
+- **격리**: 작업이 부분적 상태를 보지 않음
+- **자동 복구**: 실패한 잠금은 백오프와 함께 재시도
+
+## 설정
+
+`config.yaml`을 통해 잠금 구성:
+
+```yaml
+catalog:
+  lock_timeout: 30s
+  lock_retry_interval: 100ms
+  max_lock_retries: 100
+```
+
+### 환경 변수
+
+```bash
+ICEBERG_CATALOG_LOCK_TIMEOUT=30s
+ICEBERG_CATALOG_LOCK_RETRY_INTERVAL=100ms
+ICEBERG_CATALOG_MAX_LOCK_RETRIES=100
+```
+
+## 동작 방식
+
+### 잠금 획득 흐름
+
+1. 트랜잭션 시작
+2. SET LOCAL lock_timeout = '30s'
+3. 작업 실행 (SELECT ... FOR UPDATE)
+4. 성공 시: 트랜잭션 커밋
+5. 잠금 타임아웃 (55P03) 시: 롤백, retry_interval 대기, 재시도
+6. max_retries 초과 시: ErrLockTimeout 반환
+
+### PostgreSQL 잠금 타임아웃
+
+각 트랜잭션은 로컬로 `lock_timeout`을 설정합니다:
+
+```sql
+BEGIN;
+SET LOCAL lock_timeout = '30000ms';
+SELECT * FROM tables WHERE id = $1 FOR UPDATE;
+-- ... 업데이트 수행 ...
+COMMIT;
+```
+
+## 설정 옵션
+
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `lock_timeout` | 30s | 단일 잠금 시도 최대 대기 시간 |
+| `lock_retry_interval` | 100ms | 재시도 사이 대기 시간 |
+| `max_lock_retries` | 100 | 실패 전 최대 재시도 횟수 |
+
+### 총 대기 시간
+
+```
+max_wait = lock_timeout + (max_lock_retries × lock_retry_interval)
+         = 30s + (100 × 100ms)
+         = 40s
+```
+
+## 튜닝 가이드라인
+
+### 높은 경합 워크로드
+
+```yaml
+catalog:
+  lock_timeout: 5s
+  lock_retry_interval: 50ms
+  max_lock_retries: 200
+```
+
+### 낮은 경합 워크로드
+
+```yaml
+catalog:
+  lock_timeout: 60s
+  lock_retry_interval: 500ms
+  max_lock_retries: 10
+```
+
+### 배치 처리
+
+```yaml
+catalog:
+  lock_timeout: 120s
+  lock_retry_interval: 1s
+  max_lock_retries: 60
+```
+
+## 에러 처리
+
+### ErrLockTimeout
+
+모든 재시도가 소진되면 반환됩니다. 클라이언트가 작업을 재시도해야 합니다.
+
+### 직렬화 실패
+
+PostgreSQL 직렬화 에러 (40001)도 감지되어 처리됩니다.
+
+## 모니터링
+
+### 잠금 대기 메트릭
+
+PostgreSQL을 통해 잠금 경합 모니터링:
+
+```sql
+-- 활성 잠금
+SELECT * FROM pg_locks WHERE NOT granted;
+
+-- 잠금 대기 통계
+SELECT * FROM pg_stat_activity
+WHERE wait_event_type = 'Lock';
+```
+
+## 모범 사례
+
+### 트랜잭션 짧게 유지
+
+```go
+// 좋음: 잠금 내 최소 작업
+err := db.WithLock(ctx, cfg, func(tx pgx.Tx) error {
+    return tx.Exec(ctx, "UPDATE tables SET ...")
+})
+
+// 나쁨: 잠금 내 외부 호출
+err := db.WithLock(ctx, cfg, func(tx pgx.Tx) error {
+    callExternalService()  // 느릴 수 있음!
+    return tx.Exec(ctx, "UPDATE tables SET ...")
+})
+```
+
+## 문제 해결
+
+### 빈번한 잠금 타임아웃
+
+**원인**:
+- 같은 테이블에 대한 높은 쓰기 경합
+- 잠금을 유지하는 장기 실행 트랜잭션
+- 데이터베이스 성능 문제
+
+**해결책**:
+1. `max_lock_retries` 늘리기
+2. `lock_timeout` 줄이기 (더 빨리 실패, 더 빨리 재시도)
+3. 잠금을 유지하는 느린 쿼리 확인
+4. 다른 테이블 간 워크로드 분산
