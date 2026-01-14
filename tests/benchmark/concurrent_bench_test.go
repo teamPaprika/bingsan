@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kimuyb/bingsan/internal/api"
-	"github.com/kimuyb/bingsan/internal/pool"
+	"github.com/teamPaprika/bingsan/internal/api"
+	"github.com/teamPaprika/bingsan/internal/pool"
 )
 
 // BenchmarkConcurrentConnections measures performance under concurrent load.

@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/kimuyb/bingsan/internal/config"
-	"github.com/kimuyb/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/db"
 )
 
 // Permission represents an access permission level.

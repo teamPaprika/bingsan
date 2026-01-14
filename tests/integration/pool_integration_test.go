@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kimuyb/bingsan/internal/pool"
+	"github.com/teamPaprika/bingsan/internal/pool"
 )
 
 // TestPoolIntegration tests the pool package under realistic conditions.

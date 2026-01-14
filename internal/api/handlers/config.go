@@ -3,7 +3,7 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/kimuyb/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/config"
 )
 
 // CatalogConfig represents the catalog configuration response.

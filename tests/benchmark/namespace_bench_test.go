@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kimuyb/bingsan/internal/api"
+	"github.com/teamPaprika/bingsan/internal/api"
 )
 
 // BenchmarkListNamespaces measures the performance of listing namespaces.

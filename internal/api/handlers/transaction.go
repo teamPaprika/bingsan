@@ -9,9 +9,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/kimuyb/bingsan/internal/config"
-	"github.com/kimuyb/bingsan/internal/db"
-	"github.com/kimuyb/bingsan/internal/metrics"
+	"github.com/teamPaprika/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/metrics"
 )
 
 // CommitTransactionRequest is the request for committing a multi-table transaction.

@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kimuyb/bingsan/internal/api/handlers/updates"
+	"github.com/teamPaprika/bingsan/internal/api/handlers/updates"
 )
 
 // =============================================================================

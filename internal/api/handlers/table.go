@@ -11,11 +11,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/kimuyb/bingsan/internal/api/handlers/updates"
-	"github.com/kimuyb/bingsan/internal/config"
-	"github.com/kimuyb/bingsan/internal/db"
-	"github.com/kimuyb/bingsan/internal/metrics"
-	"github.com/kimuyb/bingsan/internal/pool"
+	"github.com/teamPaprika/bingsan/internal/api/handlers/updates"
+	"github.com/teamPaprika/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/metrics"
+	"github.com/teamPaprika/bingsan/internal/pool"
 )
 
 // TableIdentifier identifies a table by namespace and name.

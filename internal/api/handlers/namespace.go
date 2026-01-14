@@ -7,9 +7,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/kimuyb/bingsan/internal/db"
-	"github.com/kimuyb/bingsan/internal/events"
-	"github.com/kimuyb/bingsan/internal/metrics"
+	"github.com/teamPaprika/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/events"
+	"github.com/teamPaprika/bingsan/internal/metrics"
 )
 
 // Namespace represents a namespace in the catalog.

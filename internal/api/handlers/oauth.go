@@ -8,9 +8,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/kimuyb/bingsan/internal/config"
-	"github.com/kimuyb/bingsan/internal/db"
-	"github.com/kimuyb/bingsan/internal/pool"
+	"github.com/teamPaprika/bingsan/internal/config"
+	"github.com/teamPaprika/bingsan/internal/db"
+	"github.com/teamPaprika/bingsan/internal/pool"
 )
 
 // TokenRequest represents an OAuth2 token exchange request.
