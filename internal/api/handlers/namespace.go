@@ -38,9 +38,9 @@ type UpdateNamespacePropertiesRequest struct {
 
 // UpdateNamespacePropertiesResponse is the response for updating namespace properties.
 type UpdateNamespacePropertiesResponse struct {
-	Updated  []string `json:"updated"`
-	Removed  []string `json:"removed"`
-	Missing  []string `json:"missing,omitempty"`
+	Updated []string `json:"updated"`
+	Removed []string `json:"removed"`
+	Missing []string `json:"missing"` // PyIceberg requires this field to be present even when empty
 }
 
 // ListNamespaces returns all namespaces.
