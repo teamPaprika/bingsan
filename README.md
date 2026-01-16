@@ -8,6 +8,7 @@
   <a href="https://golang.org"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go" alt="Go Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
   <a href="https://goreportcard.com/report/github.com/teamPaprika/bingsan"><img src="https://goreportcard.com/badge/github.com/teamPaprika/bingsan" alt="Go Report Card"></a>
+  <a href="https://teampaprika.github.io/bingsan/"><img src="https://img.shields.io/badge/docs-latest-brightgreen.svg" alt="Documentation"></a>
 </p>
 
 <p align="center">
