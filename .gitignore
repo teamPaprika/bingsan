@@ -96,3 +96,9 @@ CLAUDE.md
 
 # Benchmarks - polaris-tools is cloned during setup
 benchmarks/polaris-tools/
+
+# Documentation site (Next.js)
+docs-site/.next/
+docs-site/out/
+docs-site/node_modules/
+docs-site/.source/
