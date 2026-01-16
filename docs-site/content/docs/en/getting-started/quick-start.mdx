@@ -38,6 +38,7 @@ docker compose -f deployments/docker/docker-compose.yml up -d
 This starts:
 - **Bingsan** - REST catalog server on port 8181
 - **PostgreSQL** - Metadata database on port 5432
+- **MinIO** - S3-compatible object storage on ports 9000 (API) and 9001 (Console)
 
 ## Step 4: Verify Installation
 
@@ -49,7 +50,7 @@ curl http://localhost:8181/health
 
 Expected response:
 ```json
-{"status": "ok"}
+{"status": "healthy"}
 ```
 
 Check readiness (includes database connectivity):
@@ -60,7 +61,7 @@ curl http://localhost:8181/ready
 
 Expected response:
 ```json
-{"status": "ready", "database": "connected"}
+{"status": "ready", "checks": {"database": "healthy"}}
 ```
 
 ## Step 5: Create Your First Namespace

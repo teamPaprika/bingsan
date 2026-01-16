@@ -36,7 +36,7 @@ Bingsan을 직접 빌드하여 실행합니다.
 
 ### 사전 요구사항
 
-- Go 1.25 이상
+- Go 1.24 이상
 - PostgreSQL 15+ (실행 중이고 접근 가능해야 함)
 
 ### 설치 단계
@@ -87,11 +87,15 @@ GOOS=darwin GOARCH=arm64 go build -o bin/iceberg-catalog-darwin-arm64 ./cmd/iceb
 
 ## 방법 3: Docker 이미지
 
-사전 빌드된 Docker 이미지를 풀하여 실행합니다.
+Docker 이미지를 로컬에서 빌드하고 실행합니다.
 
 ```bash
-# 이미지 풀
-docker pull ghcr.io/kimuyb/bingsan:latest
+# 저장소 클론
+git clone https://github.com/teamPaprika/bingsan.git
+cd bingsan
+
+# 이미지 빌드
+docker build -t bingsan:latest -f deployments/docker/Dockerfile .
 
 # 환경 변수와 함께 실행
 docker run -d \
@@ -102,8 +106,10 @@ docker run -d \
   -e ICEBERG_DATABASE_USER=iceberg \
   -e ICEBERG_DATABASE_PASSWORD=iceberg \
   -e ICEBERG_DATABASE_DATABASE=iceberg_catalog \
-  ghcr.io/kimuyb/bingsan:latest
+  bingsan:latest
 ```
+
+> **참고**: PostgreSQL이 컨테이너에서 접근 가능한지 확인하세요. 로컬 개발의 경우 네트워킹을 자동으로 처리하는 방법 1 (Docker Compose)을 사용하세요.
 
 ## 방법 4: Kubernetes
 

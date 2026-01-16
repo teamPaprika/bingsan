@@ -1,0 +1,130 @@
+---
+title: Pull Requests
+description: Guidelines for submitting pull requests to Bingsan
+---
+
+# Pull Requests
+
+This guide covers the process for submitting pull requests to Bingsan.
+
+## Before You Start
+
+1. **Check existing issues** - Look for related issues or discussions
+2. **Open an issue first** - For significant changes, discuss the approach before coding
+3. **Fork the repository** - Create your own fork to work on
+
+## Creating a Pull Request
+
+### 1. Create a Branch
+
+```bash
+# Sync your fork
+git fetch upstream
+git checkout main
+git merge upstream/main
+
+# Create a feature branch
+git checkout -b feature/your-feature-name
+```
+
+Use descriptive branch names:
+- `feature/add-gcs-support` - New features
+- `fix/namespace-deletion-bug` - Bug fixes
+- `docs/update-api-reference` - Documentation
+- `refactor/simplify-auth-flow` - Code refactoring
+
+### 2. Make Your Changes
+
+- Follow the [Code Style Guide](/docs/contributing/code-style)
+- Write tests for new functionality
+- Update documentation as needed
+
+### 3. Commit Your Changes
+
+Write clear, descriptive commit messages:
+
+```bash
+# Good
+git commit -m "Add GCS storage backend support"
+git commit -m "Fix race condition in namespace deletion"
+
+# Bad
+git commit -m "fix bug"
+git commit -m "update"
+```
+
+### 4. Run Tests and Lints
+
+Before submitting, ensure all checks pass:
+
+```bash
+# Run linter
+make lint
+
+# Run tests
+make test
+
+# Run integration tests (if applicable)
+make test-integration
+```
+
+### 5. Push and Create PR
+
+```bash
+git push origin feature/your-feature-name
+```
+
+Then open a pull request on GitHub.
+
+## Pull Request Guidelines
+
+### Title
+
+Use a clear, descriptive title:
+- `Add: GCS storage backend support`
+- `Fix: Race condition in namespace deletion`
+- `Docs: Update API reference for tables endpoint`
+
+### Description
+
+Include in your PR description:
+- **What** - Brief summary of changes
+- **Why** - Motivation and context
+- **How** - Implementation approach (if complex)
+- **Testing** - How you tested the changes
+
+### Checklist
+
+Before requesting review:
+
+- [ ] Code follows project style guidelines
+- [ ] Tests pass locally (`make test`)
+- [ ] Linter passes (`make lint`)
+- [ ] Documentation updated (if applicable)
+- [ ] Commit messages are clear and descriptive
+
+## Review Process
+
+1. **Automated checks** - CI runs tests and lints
+2. **Code review** - Maintainers review your code
+3. **Address feedback** - Make requested changes
+4. **Merge** - Once approved, a maintainer will merge
+
+### Responding to Feedback
+
+- Be responsive to review comments
+- Ask for clarification if feedback is unclear
+- Push additional commits to address feedback (don't force-push)
+
+## After Merge
+
+- Delete your feature branch
+- Sync your fork with upstream
+- Celebrate your contribution!
+
+## Getting Help
+
+If you need help with your PR:
+- Comment on the PR with questions
+- Join discussions in GitHub Issues
+- Check existing PRs for examples

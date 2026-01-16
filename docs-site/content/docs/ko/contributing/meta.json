@@ -1,4 +1,4 @@
 {
   "title": "기여하기",
-  "pages": ["index", "development", "testing", "code-style"]
+  "pages": ["index", "development", "testing", "code-style", "pull-requests"]
 }

@@ -1,4 +1,4 @@
 {
   "title": "Contributing",
-  "pages": ["index", "development", "testing", "code-style"]
+  "pages": ["index", "development", "testing", "code-style", "pull-requests"]
 }

@@ -36,7 +36,7 @@ Build and run Bingsan directly on your machine.
 
 ### Prerequisites
 
-- Go 1.25 or later
+- Go 1.24 or later
 - PostgreSQL 15+ (running and accessible)
 
 ### Steps
@@ -87,11 +87,15 @@ GOOS=darwin GOARCH=arm64 go build -o bin/iceberg-catalog-darwin-arm64 ./cmd/iceb
 
 ## Method 3: Docker Image
 
-Pull and run the pre-built Docker image.
+Build and run the Docker image locally.
 
 ```bash
-# Pull the image
-docker pull ghcr.io/kimuyb/bingsan:latest
+# Clone the repository
+git clone https://github.com/teamPaprika/bingsan.git
+cd bingsan
+
+# Build the image
+docker build -t bingsan:latest -f deployments/docker/Dockerfile .
 
 # Run with environment variables
 docker run -d \
@@ -102,8 +106,10 @@ docker run -d \
   -e ICEBERG_DATABASE_USER=iceberg \
   -e ICEBERG_DATABASE_PASSWORD=iceberg \
   -e ICEBERG_DATABASE_DATABASE=iceberg_catalog \
-  ghcr.io/kimuyb/bingsan:latest
+  bingsan:latest
 ```
+
+> **Note**: Make sure PostgreSQL is accessible from the container. For local development, use Method 1 (Docker Compose) which handles networking automatically.
 
 ## Method 4: Kubernetes
 
