@@ -73,7 +73,7 @@ export default async function HomePage({
       <div className="max-w-4xl text-center">
         <div className="mb-6 flex justify-center">
           <Image
-            src="/bingsan-logo.png"
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/bingsan-logo.png`}
             alt="Bingsan Logo"
             width={120}
             height={120}

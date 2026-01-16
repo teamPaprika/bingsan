@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     locale: 'en_US',
   },
   icons: {
-    icon: '/favicon.svg',
+    icon: `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/favicon.svg`,
   },
 };
 

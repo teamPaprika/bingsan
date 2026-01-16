@@ -20,7 +20,7 @@ export default async function Layout({
         title: (
           <div className="flex items-center gap-2">
             <Image
-              src="/bingsan-logo.png"
+              src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/bingsan-logo.png`}
               alt="Bingsan"
               width={28}
               height={28}
