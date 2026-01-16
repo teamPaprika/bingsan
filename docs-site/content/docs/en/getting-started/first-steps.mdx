@@ -59,6 +59,27 @@ curl -X POST http://localhost:8181/v1/namespaces \
   }'
 ```
 
+### Referencing Nested Namespaces in URLs
+
+When referencing nested namespaces in REST API URLs (GET, DELETE, HEAD), use one of these formats:
+
+**Option 1: Dot-separated (simple)**
+```bash
+# Get nested namespace
+curl http://localhost:8181/v1/namespaces/analytics.events
+
+# Delete nested namespace
+curl -X DELETE http://localhost:8181/v1/namespaces/analytics.events
+```
+
+**Option 2: URL-encoded unit separator (`%1F`)**
+```bash
+# For namespaces with dots in their names, use %1F separator
+curl http://localhost:8181/v1/namespaces/analytics%1Fevents
+```
+
+> **Note**: Use `%1F` (unit separator) when namespace parts contain dots, e.g., `["my.app", "events"]` should be encoded as `my.app%1Fevents`.
+
 ## List Namespaces
 
 ```bash

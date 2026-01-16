@@ -1,0 +1,130 @@
+---
+title: Pull Request
+description: Bingsan에 Pull Request 제출 가이드
+---
+
+# Pull Request
+
+Bingsan에 Pull Request를 제출하는 과정을 안내합니다.
+
+## 시작하기 전에
+
+1. **기존 이슈 확인** - 관련 이슈나 논의가 있는지 확인
+2. **먼저 이슈 열기** - 중요한 변경사항은 코딩 전에 접근 방식 논의
+3. **저장소 포크** - 작업할 자신만의 포크 생성
+
+## Pull Request 만들기
+
+### 1. 브랜치 생성
+
+```bash
+# 포크 동기화
+git fetch upstream
+git checkout main
+git merge upstream/main
+
+# 기능 브랜치 생성
+git checkout -b feature/your-feature-name
+```
+
+설명적인 브랜치 이름 사용:
+- `feature/add-gcs-support` - 새 기능
+- `fix/namespace-deletion-bug` - 버그 수정
+- `docs/update-api-reference` - 문서
+- `refactor/simplify-auth-flow` - 코드 리팩토링
+
+### 2. 변경사항 작성
+
+- [코드 스타일 가이드](/docs/contributing/code-style) 준수
+- 새 기능에 대한 테스트 작성
+- 필요시 문서 업데이트
+
+### 3. 변경사항 커밋
+
+명확하고 설명적인 커밋 메시지 작성:
+
+```bash
+# 좋은 예
+git commit -m "Add GCS storage backend support"
+git commit -m "Fix race condition in namespace deletion"
+
+# 나쁜 예
+git commit -m "fix bug"
+git commit -m "update"
+```
+
+### 4. 테스트 및 린트 실행
+
+제출 전 모든 검사 통과 확인:
+
+```bash
+# 린터 실행
+make lint
+
+# 테스트 실행
+make test
+
+# 통합 테스트 실행 (해당되는 경우)
+make test-integration
+```
+
+### 5. 푸시 및 PR 생성
+
+```bash
+git push origin feature/your-feature-name
+```
+
+그런 다음 GitHub에서 Pull Request를 엽니다.
+
+## Pull Request 가이드라인
+
+### 제목
+
+명확하고 설명적인 제목 사용:
+- `Add: GCS storage backend support`
+- `Fix: Race condition in namespace deletion`
+- `Docs: Update API reference for tables endpoint`
+
+### 설명
+
+PR 설명에 포함할 내용:
+- **What** - 변경사항 요약
+- **Why** - 동기와 컨텍스트
+- **How** - 구현 접근 방식 (복잡한 경우)
+- **Testing** - 테스트 방법
+
+### 체크리스트
+
+리뷰 요청 전:
+
+- [ ] 코드가 프로젝트 스타일 가이드라인 준수
+- [ ] 로컬에서 테스트 통과 (`make test`)
+- [ ] 린터 통과 (`make lint`)
+- [ ] 문서 업데이트됨 (해당되는 경우)
+- [ ] 커밋 메시지가 명확하고 설명적임
+
+## 리뷰 프로세스
+
+1. **자동화된 검사** - CI가 테스트와 린트 실행
+2. **코드 리뷰** - 메인테이너가 코드 검토
+3. **피드백 반영** - 요청된 변경사항 반영
+4. **병합** - 승인되면 메인테이너가 병합
+
+### 피드백에 응답하기
+
+- 리뷰 코멘트에 신속하게 응답
+- 피드백이 불명확하면 명확화 요청
+- 피드백 반영을 위해 추가 커밋 푸시 (force-push 하지 않기)
+
+## 병합 후
+
+- 기능 브랜치 삭제
+- upstream과 포크 동기화
+- 기여를 축하하세요!
+
+## 도움 받기
+
+PR에 도움이 필요하면:
+- PR에 질문 코멘트 달기
+- GitHub Issues에서 논의 참여
+- 기존 PR을 예시로 확인

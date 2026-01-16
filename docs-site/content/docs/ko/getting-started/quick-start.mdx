@@ -38,6 +38,7 @@ docker compose -f deployments/docker/docker-compose.yml up -d
 다음 서비스가 시작됩니다:
 - **Bingsan** - 포트 8181의 REST catalog 서버
 - **PostgreSQL** - 포트 5432의 메타데이터 데이터베이스
+- **MinIO** - 포트 9000 (API) 및 9001 (콘솔)의 S3 호환 오브젝트 스토리지
 
 ## Step 4: 설치 확인
 
@@ -49,7 +50,7 @@ curl http://localhost:8181/health
 
 예상 응답:
 ```json
-{"status": "ok"}
+{"status": "healthy"}
 ```
 
 준비 상태 확인 (데이터베이스 연결 포함):
@@ -60,7 +61,7 @@ curl http://localhost:8181/ready
 
 예상 응답:
 ```json
-{"status": "ready", "database": "connected"}
+{"status": "ready", "checks": {"database": "healthy"}}
 ```
 
 ## Step 5: 첫 번째 네임스페이스 생성
