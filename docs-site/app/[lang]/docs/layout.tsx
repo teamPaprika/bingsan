@@ -30,6 +30,14 @@ export default async function Layout({
           </div>
         ),
       }}
+      githubUrl="https://github.com/teamPaprika/bingsan"
+      links={[
+        {
+          text: lang === 'ko' ? '홈' : 'Home',
+          url: `/${lang}`,
+          active: 'none',
+        },
+      ]}
       i18n={i18n}
     >
       {children}
